@@ -66,11 +66,21 @@ class RetrievalConfig(BaseModel):
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
 
 
+class OllamaConfig(BaseModel):
+    """Ollama 설정"""
+    base_url: str = Field(default="http://localhost:11434")
+    model: str = Field(default="llama3:8b")
+
+
 class GenerationConfig(BaseModel):
     """답변 생성 설정"""
-    model: str = "gemini-2.5-flash"
+    provider: Literal["gemini", "ollama"] = "gemini"
+    model: str = "gemini-2.5-flash"  # 기본 모델 (provider에 따라 무시될 수 있음)
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1024, ge=1)
+    
+    # Provider-specific configs
+    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
 
 
 class LoggingConfig(BaseModel):

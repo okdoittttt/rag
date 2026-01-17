@@ -9,7 +9,7 @@ import json
 import re
 from typing import Optional
 
-from rag.generation.llm import GeminiLLM
+from rag.generation.llm import LLM, get_llm
 from rag.logger import get_logger
 
 
@@ -38,13 +38,13 @@ class QueryRewriter:
     LLM을 사용하여 원본 질문을 여러 검색 쿼리로 확장합니다.
     """
     
-    def __init__(self, llm: Optional[GeminiLLM] = None):
+    def __init__(self, llm: Optional[LLM] = None):
         """QueryRewriter 초기화
         
         Args:
-            llm: LLM 인스턴스 (None이면 새로 생성)
+            llm: LLM 인스턴스 (None이면 config에 따라 자동 생성)
         """
-        self.llm = llm or GeminiLLM()
+        self.llm = llm or get_llm()
     
     def rewrite(self, query: str, num_queries: int = 3) -> list[str]:
         """질문을 여러 변형으로 재작성

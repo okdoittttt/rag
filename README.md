@@ -154,6 +154,24 @@ PYTHONPATH=src python -m cli.main ask "attention 메커니즘의 원리는?" --e
 
 > **Note**: `--expand` 옵션 사용 시 LLM 호출 횟수가 증가하여 API 비용이 추가로 발생할 수 있습니다.
 
+#### Local LLM 사용 (`--provider`)
+
+Gemini API 대신 로컬 Ollama 모델을 사용할 수 있습니다.
+
+**전제 조건:**
+1. Ollama 설치 및 서버 실행 (`ollama serve`)
+2. 모델 다운로드 (`ollama pull llama3`)
+
+```bash
+# Ollama로 질문하기
+PYTHONPATH=src python -m cli.main ask "Attention이 뭐야?" --provider ollama
+
+# Ollama + Query Rewriting (로컬 LLM이 쿼리 확장 수행)
+PYTHONPATH=src python -m cli.main ask "BN 설명해줘" --provider ollama --expand
+```
+
+> **Note**: `--provider` 옵션은 즉시 Provider를 전환하며, Query Rewriting 등 내부적으로 LLM을 사용하는 모든 기능에 적용됩니다.
+
 #### 검색 결과 확인 (`rag search`)
 
 LLM 답변 생성 없이, 검색된 청크(Chunk)를 직접 확인합니다. (디버깅용)
@@ -162,23 +180,48 @@ LLM 답변 생성 없이, 검색된 청크(Chunk)를 직접 확인합니다. (�
 PYTHONPATH=src python -m cli.main search "청킹 전략" --top-k 5
 ```
 
-### 4. Docker로 실행 (권장)
+## 💻 CLI 명령어 상세 가이드
 
-환경 설정 없이 바로 실행하려면 Docker를 사용하세요.
+이 프로젝트는 다양한 CLI 옵션을 제공합니다. 각 기능의 조합으로 강력한 검색과 답변 생성이 가능합니다.
+
+### 자주 사용하는 옵션 조합
+
+| 시나리오 | 명령어 옵션 | 설명 |
+|----------|-------------|------|
+| **기본 (빠름)** | `rag ask "질문"` | Gemini API 사용, 기본 검색 |
+| **정확도 향상** | `rag ask "질문" --rerank` | Reranker로 검색 결과 정밀 재정렬 |
+| **범위 확장** | `rag ask "질문" --expand` | Query Rewriting으로 질문 변형 및 확장 검색 |
+| **최고 성능** | `rag ask "질문" --expand --rerank` | 확장 검색 + 정밀 재정렬 (가장 강력함) |
+| **로컬 LLM** | `rag ask "질문" --provider ollama` | 외부 API 없이 로컬 모델 사용 |
+| **디버깅** | `rag ask "질문" --verbose --show-context` | 상세 로그 및 참고한 문서 청크 표시 |
+
+### 상세 옵션 설명
+
+- `--provider` (`-p`): LLM 공급자 선택 (`gemini` | `ollama`)
+  - 기본값: `gemini` (또는 config 설정)
+- `--expand` (`-e`): Query Rewriting 활성화
+  - 질문을 3가지 다른 표현으로 확장하여 검색 범위를 넓힘
+- `--rerank` (`-r`): Cross-Encoder Reranker 활성화
+  - 1차 검색된 15개 후보를 정밀 재채점하여 상위 5개 선별
+- `--top-k` (`-k`): 최종 답변 생성에 사용할 문서 청크 개수 (기본: 5)
+- `--show-context` (`-s`): LLM이 답변에 참고한 문서 청크 내용을 출력
+- `--verbose` (`-v`): 내부 로직(검색 점수, 토큰 수 등) 상세 로그 출력
+
+### 환경 변수 설정 (Remote Ollama 등)
+
+로컬이 아닌 **원격 서버의 Ollama**를 사용하거나, 포트를 변경해야 할 경우 환경변수를 사용하세요.
 
 ```bash
-# 빌드 및 실행 준비
-docker compose build
+# 원격 Ollama 서버 사용 예시
+export RAG_GENERATION_PROVIDER=ollama
+export RAG_GENERATION_OLLAMA_BASE_URL=http://192.168.1.100:11434
+export RAG_GENERATION_OLLAMA_MODEL=mistral
 
-# 문서 인덱싱
-docker compose run --rm rag index ./data/sample_docs
-
-# 질문하기
-docker compose run --rm rag ask "Attention이 뭐야?"
-
-# 검색 결과 확인
-docker compose run --rm rag search "컨테이너"
+# 명령어 실행 (옵션 없이도 위 설정 적용됨)
+PYTHONPATH=src python -m cli.main ask "원격 서버의 모델이 답변합니다"
 ```
+
+---
 
 ## 📁 프로젝트 구조
 

@@ -16,6 +16,7 @@ dependencies = [
     "pyyaml>=6.0.3",
     "qdrant-client>=1.16.2",
     "rank-bm25>=0.2.2",
+    "requests>=2.32.5",
     "rich>=14.2.0",
     "sentence-transformers>=5.2.0",
     "structlog>=25.5.0",

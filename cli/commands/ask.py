@@ -13,7 +13,7 @@ from rich.panel import Panel
 
 from rag.config import get_config
 from rag.embedding import Embedder, get_vector_store
-from rag.generation import build_prompt, GeminiLLM
+from rag.generation import build_prompt, get_llm
 from rag.retrieval import HybridSearcher
 from rag.retrieval.reranker import Reranker
 from rag.retrieval.query_rewriter import QueryRewriter
@@ -71,6 +71,7 @@ def handle_ask(
     show_context: Annotated[bool, typer.Option("--show-context", "-s", help="참조된 컨텍스트 표시")] = False,
     rerank: Annotated[bool, typer.Option("--rerank", "-r", help="Reranker로 결과 재정렬")] = False,
     expand: Annotated[bool, typer.Option("--expand", "-e", help="Query Rewriting으로 검색 확장")] = False,
+    provider: Annotated[str, typer.Option("--provider", "-p", help="LLM Provider (gemini/ollama)")] = None,
     verbose: Annotated[bool, typer.Option("--verbose", "-v", help="상세 로그 출력")] = False,
 ):
     """질문에 대해 답변합니다."""
@@ -101,8 +102,8 @@ def handle_ask(
 
         # 2. Query Rewriting (선택적)
         if expand:
-            console.print("[dim]Expanding query...[/dim]")
-            llm = GeminiLLM()
+            console.print(f"[dim]Expanding query using {provider or config.generation.provider}...[/dim]")
+            llm = get_llm(provider)
             rewriter = QueryRewriter(llm)
             queries = rewriter.rewrite(query)
             console.print(f"[dim]Queries: {queries}[/dim]")
@@ -139,7 +140,7 @@ def handle_ask(
         prompt = build_prompt(query, chunks)
         
         try:
-            llm = GeminiLLM()
+            llm = get_llm(provider)
             answer = llm.generate(prompt)
         except Exception as e:
             console.print(f"[red]LLM Error: {e}[/red]")
