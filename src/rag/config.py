@@ -23,6 +23,7 @@ class ProjectConfig(BaseModel):
     """프로젝트 기본 정보"""
     name: str = "terminal-rag"
     version: str = "0.1.0"
+    index_path: str = "data/index"
 
 
 class IngestionConfig(BaseModel):
@@ -54,7 +55,7 @@ class RetrievalConfig(BaseModel):
 
 class GenerationConfig(BaseModel):
     """답변 생성 설정"""
-    model: str = "gpt-4o-mini"
+    model: str = "gemini-2.5-flash"
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1024, ge=1)
 

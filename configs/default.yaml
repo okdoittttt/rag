@@ -4,6 +4,7 @@
 project:
   name: terminal-rag
   version: 0.1.0
+  index_path: data/index
 
 ingestion:
   supported_extensions:
@@ -27,7 +28,7 @@ retrieval:
   search_type: vector     # vector | hybrid
 
 generation:
-  model: gemini-1.5-flash
+  model: gemini-2.5-flash
   # temperature: 0.1  # 코드에서 직접 제어하거나 필요 시 주석 해제하여 사용
   # max_tokens: 1024
 

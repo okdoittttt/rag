@@ -17,6 +17,8 @@ from rag.generation import GeminiLLM, build_prompt
 from rag.retrieval import HybridSearcher
 
 
+from rag.logger import setup_logging
+
 console = Console()
 
 
@@ -24,8 +26,12 @@ def handle_ask(
     query: Annotated[str, typer.Argument(help="질문 내용")],
     top_k: Annotated[int, typer.Option("--top-k", "-k", help="참조할 청크 개수")] = 5,
     show_context: Annotated[bool, typer.Option("--show-context", "-s", help="참조된 컨텍스트 표시")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="상세 로그 출력")] = False,
 ):
     """질문에 대해 답변합니다."""
+    if verbose:
+        setup_logging(log_level="DEBUG")
+
     config = get_config()
     index_path = Path(config.project.index_path)
     

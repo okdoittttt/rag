@@ -18,14 +18,20 @@ from rag.ingestion import load_documents
 from rag.retrieval import HybridSearcher
 
 
+from rag.logger import setup_logging
+
 console = Console()
 
 
 def handle_index(
     path: Annotated[Path, typer.Argument(help="문서가 있는 경로 (파일 또는 폴더)")],
     reset: Annotated[bool, typer.Option("--reset", "-r", help="기존 인덱스 삭제 후 재생성")] = False,
+    verbose: Annotated[bool, typer.Option("--verbose", "-v", help="상세 로그 출력")] = False,
 ):
     """지정된 경로의 문서를 인덱싱합니다."""
+    if verbose:
+        setup_logging(log_level="DEBUG")
+
     config = get_config()
     index_path = Path(config.project.index_path)
     
