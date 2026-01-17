@@ -21,6 +21,7 @@ Python으로 구현되었으며, 로컬 임베딩/검색과 Google Gemini API를
 
 - **검색 (Retrieval)**
   - **하이브리드 검색**: BM25 (키워드) + Vector (의미)
+  - **Query Rewriting**: LLM을 활용한 질문 확장 및 최적화 (`--expand`)
   - **2단계 Reranking**: Cross-Encoder(`BAAI/bge-reranker-v2-m3`)로 검색 결과 재정렬
   - **한국어 형태소 분석**: `kiwipiepy`를 활용한 정확한 명사/용언 추출
   - 가중치 합산 (Weighted Sum) 및 Min-Max 정규화 기반 랭킹
@@ -46,7 +47,8 @@ flowchart TD
     end
 
     subgraph RAG["🤖 답변 생성 (Retrieval & Generation)"]
-        Q[User Query] -->|Hybrid Search| H{Hybrid Searcher}
+        Q[User Query] -->|Expand| QR[Query Rewriter]
+        QR -->|Multi-Queries| H{Hybrid Searcher}
         V --> H
         B --> H
         H -->|Top-k*3 후보| RR[Reranker<br/>Cross-Encoder]
@@ -137,6 +139,20 @@ PYTHONPATH=src python -m cli.main ask "self-attention이란?" --rerank --show-co
 ```
 
 > **Note**: Reranker는 `BAAI/bge-reranker-v2-m3` 모델을 사용하며, 한국어를 포함한 100+ 언어를 지원합니다.
+
+#### Query Rewriting으로 검색 범위 확장 (`--expand`)
+
+LLM을 사용하여 모호한 질문을 구체화하거나, 다양한 관점의 질문으로 확장하여 검색합니다.
+
+```bash
+# Query Rewriting 사용 (질문 변형 3개 생성)
+PYTHONPATH=src python -m cli.main ask "BN이 뭐야?" --expand --show-context
+
+# 최적 조합: Query Rewriting + Reranking (가장 강력한 검색)
+PYTHONPATH=src python -m cli.main ask "attention 메커니즘의 원리는?" --expand --rerank
+```
+
+> **Note**: `--expand` 옵션 사용 시 LLM 호출 횟수가 증가하여 API 비용이 추가로 발생할 수 있습니다.
 
 #### 검색 결과 확인 (`rag search`)
 
