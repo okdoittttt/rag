@@ -9,10 +9,14 @@ from __future__ import annotations
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
+
+# .env 파일 로드
+load_dotenv()
 
 
 class ProjectConfig(BaseModel):

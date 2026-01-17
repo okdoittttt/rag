@@ -6,10 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "faiss-cpu>=1.13.2",
+    "google-generativeai>=0.8.6",
     "kiwipiepy>=0.22.2",
     "numpy>=2.4.1",
     "pydantic>=2.12.5",
     "pytest>=9.0.2",
+    "python-dotenv>=1.2.1",
     "pyyaml>=6.0.3",
     "rank-bm25>=0.2.2",
     "sentence-transformers>=5.2.0",
