@@ -1,7 +1,20 @@
 [project]
-name = "rag"
+name = "terminal-rag"
 version = "0.1.0"
-description = "Add your description here"
+description = "Terminal-based RAG system for document Q&A with citation support"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic>=2.12.5",
+    "pytest>=9.0.2",
+    "pyyaml>=6.0.3",
+    "structlog>=25.5.0",
+    "typer>=0.21.1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
