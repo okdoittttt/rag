@@ -6,9 +6,10 @@ Python으로 구현되었으며, 로컬 임베딩/검색과 Google Gemini API를
 ## ✨ 주요 기능
 
 - **문서 수집 (Ingestion)**
-  - `.txt`, `.md` 파일 지원
+  - `.txt`, `.md`, `.pdf` 파일 지원
   - 디렉토리 재귀 탐색 및 자동 로드
   - 한국어/영어 언어 감지 및 텍스트 정규화
+  - **증분 인덱싱**: 파일 해시 기반으로 변경된 문서만 재인덱싱
 
 - **청킹 (Chunking)**
   - 문맥 유지를 위한 문장/문단 단위 분할
@@ -20,6 +21,7 @@ Python으로 구현되었으며, 로컬 임베딩/검색과 Google Gemini API를
 
 - **검색 (Retrieval)**
   - **하이브리드 검색**: BM25 (키워드) + Vector (의미)
+  - **2단계 Reranking**: Cross-Encoder(`BAAI/bge-reranker-v2-m3`)로 검색 결과 재정렬
   - **한국어 형태소 분석**: `kiwipiepy`를 활용한 정확한 명사/용언 추출
   - 가중치 합산 (Weighted Sum) 및 Min-Max 정규화 기반 랭킹
 
@@ -47,8 +49,8 @@ flowchart TD
         Q[User Query] -->|Hybrid Search| H{Hybrid Searcher}
         V --> H
         B --> H
-        H -->|Scores| R[Result Filtering]
-        R -->|Top-k Chunks| P(Prompt Builder)
+        H -->|Top-k*3 후보| RR[Reranker<br/>Cross-Encoder]
+        RR -->|Top-k 정밀 선별| P(Prompt Builder)
         P -->|Context + Query| LLM(Large Language Model)
         LLM -->|Generate| A[Final Answer]
     end
@@ -67,8 +69,9 @@ flowchart TD
 | **설정/검증** | `pydantic`, `pyyaml` | 환경변수 및 YAML 설정 관리 |
 | **로깅** | `structlog` | JSON 구조화 로깅 및 민감정보 마스킹 |
 | **임베딩** | `sentence-transformers` | 로컬 임베딩 모델 실행 |
-| **벡터 DB** | `faiss-cpu` | Meta AI 벡터 검색 라이브러리 |
+| **벡터 DB** | `faiss-cpu`, `qdrant-client` | 벡터 검색 (로컬 FAISS / Qdrant 서버) |
 | **키워드 검색** | `rank_bm25`, `kiwipiepy` | BM25 알고리즘 및 한국어 형태소 분석 |
+| **Reranker** | `sentence-transformers` | Cross-Encoder 기반 2차 재정렬 |
 | **LLM** | `google-generativeai` | Google Gemini API 클라이언트 |
 
 ## 🚀 시작하기
@@ -119,6 +122,21 @@ PYTHONPATH=src python -m cli.main ask "attention 이란게 뭐야?"
 # 상세 로그 및 검색된 원문 컨텍스트 확인
 PYTHONPATH=src python -m cli.main ask "BM25가 뭐야?" --verbose --show-context
 ```
+
+#### Reranking으로 검색 품질 향상 (`--rerank`)
+
+Cross-Encoder 기반 Reranker를 사용하여 검색 결과를 재정렬합니다.
+1차 검색(Bi-Encoder)보다 정확한 관련성 평가가 가능합니다.
+
+```bash
+# Reranker 사용 (첫 실행 시 모델 다운로드 ~1.2GB)
+PYTHONPATH=src python -m cli.main ask "Scaled Dot-Product Attention이 뭐야?" --rerank
+
+# Reranker + 컨텍스트 확인
+PYTHONPATH=src python -m cli.main ask "self-attention이란?" --rerank --show-context
+```
+
+> **Note**: Reranker는 `BAAI/bge-reranker-v2-m3` 모델을 사용하며, 한국어를 포함한 100+ 언어를 지원합니다.
 
 #### 검색 결과 확인 (`rag search`)
 
