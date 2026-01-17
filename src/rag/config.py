@@ -68,8 +68,10 @@ class RetrievalConfig(BaseModel):
 
 class OllamaConfig(BaseModel):
     """Ollama 설정"""
-    base_url: str = Field(default="http://localhost:11434")
-    model: str = Field(default="llama3:8b")
+    # 기본값을 제거하여 환경변수 설정을 유도하거나, 명시적으로 로컬호스트임을 인지하고 사용하도록 함
+    # 실운영 환경에서는 반드시 환경변수로 주입받아야 함
+    base_url: str | None = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL"))
+    model: str | None = Field(default_factory=lambda: os.getenv("OLLAMA_MODEL"))
 
 
 class GenerationConfig(BaseModel):

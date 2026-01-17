@@ -207,18 +207,23 @@ PYTHONPATH=src python -m cli.main search "청킹 전략" --top-k 5
 - `--show-context` (`-s`): LLM이 답변에 참고한 문서 청크 내용을 출력
 - `--verbose` (`-v`): 내부 로직(검색 점수, 토큰 수 등) 상세 로그 출력
 
-### 환경 변수 설정 (Remote Ollama 등)
+### 환경 변수 설정 (.env)
 
-로컬이 아닌 **원격 서버의 Ollama**를 사용하거나, 포트를 변경해야 할 경우 환경변수를 사용하세요.
+로컬이 아닌 **원격 서버의 Ollama**를 사용하거나, 포트를 변경해야 할 경우 `.env` 파일에 설정을 추가하세요.
 
 ```bash
-# 원격 Ollama 서버 사용 예시
-export RAG_GENERATION_PROVIDER=ollama
-export RAG_GENERATION_OLLAMA_BASE_URL=http://192.168.1.100:11434
-export RAG_GENERATION_OLLAMA_MODEL=mistral
+# .env 파일 예시
+GOOGLE_API_KEY=your_key...
 
-# 명령어 실행 (옵션 없이도 위 설정 적용됨)
-PYTHONPATH=src python -m cli.main ask "원격 서버의 모델이 답변합니다"
+# Ollama 설정 (선택사항)
+OLLAMA_BASE_URL=http://192.168.1.100:11434
+OLLAMA_MODEL=llama3:8b
+```
+
+설정 후 실행하면 자동으로 해당 환경변수 값을 사용합니다.
+
+```bash
+PYTHONPATH=src python -m cli.main ask "원격 서버의 모델이 답변합니다" --provider ollama
 ```
 
 ---

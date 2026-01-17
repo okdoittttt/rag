@@ -13,9 +13,12 @@ from typing import Optional
 import requests
 import google.generativeai as genai
 from google.api_core import exceptions
+from dotenv import load_dotenv
 
 from rag.config import get_config, GenerationConfig
 from rag.logger import get_logger
+
+load_dotenv()
 
 
 logger = get_logger(__name__)
