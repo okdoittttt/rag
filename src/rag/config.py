@@ -41,8 +41,9 @@ class ChunkingConfig(BaseModel):
 
 class EmbeddingConfig(BaseModel):
     """임베딩 설정"""
-    model: str = "text-embedding-3-small"
-    dimension: int = 1536
+    # model: str = "text-embedding-3-small"
+    model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    dimension: int = 384
     batch_size: int = Field(default=100, ge=1)
 
 
@@ -130,7 +131,16 @@ def load_config(config_path: Path | str | None = None) -> Config:
         검증된 Config 객체
     """
     if config_path is None:
-        config_path = _get_project_root() / "configs" / "default.yaml"
+        # 1. 환경변수 확인
+        env_path = os.getenv("RAG_CONFIG_PATH")
+        if env_path:
+            config_path = Path(env_path)
+        # 2. 현재 작업 디렉토리의 configs/default.yaml 확인 (Docker/배포 환경)
+        elif (Path.cwd() / "configs" / "default.yaml").exists():
+            config_path = Path.cwd() / "configs" / "default.yaml"
+        # 3. 패키지 내부 경로 확인 (개발 환경)
+        else:
+            config_path = _get_project_root() / "configs" / "default.yaml"
     else:
         config_path = Path(config_path)
     
