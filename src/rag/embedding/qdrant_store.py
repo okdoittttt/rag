@@ -124,16 +124,16 @@ class QdrantStore(VectorStoreBase):
         # 쿼리 벡터 준비
         query_vector = query_embedding[0].tolist() if query_embedding.ndim == 2 else query_embedding.tolist()
         
-        # 검색
-        results = self.client.search(
+        # 검색 (query_points API 사용 - qdrant-client 1.10+)
+        results = self.client.query_points(
             collection_name=self.collection_name,
-            query_vector=query_vector,
+            query=query_vector,
             limit=top_k,
         )
         
         # 결과 변환
         output: list[tuple[Chunk, float]] = []
-        for hit in results:
+        for hit in results.points:
             payload = hit.payload or {}
             # 저장된 metadata 또는 payload에서 재구성
             metadata = payload.get("metadata", {})
