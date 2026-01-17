@@ -10,6 +10,7 @@ dependencies = [
     "kiwipiepy>=0.22.2",
     "numpy>=2.4.1",
     "pydantic>=2.12.5",
+    "pypdf>=6.6.0",
     "pytest>=9.0.2",
     "python-dotenv>=1.2.1",
     "pyyaml>=6.0.3",

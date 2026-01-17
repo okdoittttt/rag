@@ -10,6 +10,7 @@ ingestion:
   supported_extensions:
     - ".txt"
     - ".md"
+    - ".pdf"
   encoding: utf-8
 
 chunking:

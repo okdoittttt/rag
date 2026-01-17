@@ -46,8 +46,8 @@ class QdrantStore(VectorStoreBase):
         self.port = port
         self.collection_name = collection_name
         
-        # Qdrant 클라이언트 초기화
-        self.client = QdrantClient(host=host, port=port)
+        # Qdrant 클라이언트 초기화 (타임아웃 증가)
+        self.client = QdrantClient(host=host, port=port, timeout=60)
         
         # 컬렉션 생성 (없으면)
         self._ensure_collection()
@@ -74,8 +74,14 @@ class QdrantStore(VectorStoreBase):
             )
             logger.info("collection_created", collection=self.collection_name)
     
-    def add(self, chunks: list[Chunk], embeddings: np.ndarray) -> None:
-        """청크와 임베딩 추가"""
+    def add(self, chunks: list[Chunk], embeddings: np.ndarray, batch_size: int = 50) -> None:
+        """청크와 임베딩 추가 (배치 업로드)
+        
+        Args:
+            chunks: 청크 리스트
+            embeddings: 임베딩 배열
+            batch_size: 한 번에 업로드할 포인트 수 (기본: 50)
+        """
         if len(chunks) != len(embeddings):
             raise ValueError(
                 f"Chunks count ({len(chunks)}) and embeddings count ({len(embeddings)}) must match"
@@ -105,16 +111,28 @@ class QdrantStore(VectorStoreBase):
                 )
             )
         
-        # 배치 업로드
-        self.client.upsert(
-            collection_name=self.collection_name,
-            points=points,
-        )
+        # 배치 업로드 (타임아웃 방지)
+        total_batches = (len(points) + batch_size - 1) // batch_size
+        for i in range(0, len(points), batch_size):
+            batch = points[i:i + batch_size]
+            self.client.upsert(
+                collection_name=self.collection_name,
+                points=batch,
+                wait=True,
+            )
+            batch_num = (i // batch_size) + 1
+            logger.debug(
+                "batch_uploaded",
+                batch=batch_num,
+                total_batches=total_batches,
+                points_in_batch=len(batch),
+            )
         
         logger.info(
             "chunks_added_to_qdrant",
             count=len(chunks),
             collection=self.collection_name,
+            batches=total_batches,
         )
     
     def search(
