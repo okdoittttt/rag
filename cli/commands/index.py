@@ -13,7 +13,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from rag.chunking import chunk_document
 from rag.config import get_config
-from rag.embedding import Embedder, VectorStore
+from rag.embedding import Embedder, get_vector_store
 from rag.ingestion import load_documents
 from rag.retrieval import HybridSearcher
 
@@ -73,7 +73,7 @@ def handle_index(
         task_embed = progress.add_task("Embedding and Indexing...", total=None)
         
         embedder = Embedder()
-        store = VectorStore(dimension=config.embedding.dimension)
+        store = get_vector_store(config)  # 팩토리 함수 사용
         searcher = HybridSearcher(embedder, store)
         
         # 기존 인덱스가 있으면 로드

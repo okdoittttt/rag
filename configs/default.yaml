@@ -21,6 +21,11 @@ embedding:
   model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
   dimension: 384
   batch_size: 32
+  store_type: qdrant         # qdrant | faiss
+  qdrant:
+    host: localhost
+    port: 6333
+    collection: terminal-rag
 
 retrieval:
   top_k: 5

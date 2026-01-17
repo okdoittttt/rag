@@ -39,12 +39,21 @@ class ChunkingConfig(BaseModel):
     preserve_structure: bool = True
 
 
+class QdrantConfig(BaseModel):
+    """Qdrant 서버 설정"""
+    host: str = "localhost"
+    port: int = 6333
+    collection: str = "terminal-rag"
+
+
 class EmbeddingConfig(BaseModel):
     """임베딩 설정"""
     # model: str = "text-embedding-3-small"
     model: str = "sentence-transformers/all-MiniLM-L6-v2"
     dimension: int = 384
     batch_size: int = Field(default=100, ge=1)
+    store_type: Literal["faiss", "qdrant"] = "faiss"
+    qdrant: QdrantConfig = Field(default_factory=QdrantConfig)
 
 
 class RetrievalConfig(BaseModel):

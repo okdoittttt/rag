@@ -13,6 +13,7 @@ dependencies = [
     "pytest>=9.0.2",
     "python-dotenv>=1.2.1",
     "pyyaml>=6.0.3",
+    "qdrant-client>=1.16.2",
     "rank-bm25>=0.2.2",
     "rich>=14.2.0",
     "sentence-transformers>=5.2.0",

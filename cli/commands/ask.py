@@ -12,7 +12,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 
 from rag.config import get_config
-from rag.embedding import Embedder, VectorStore
+from rag.embedding import Embedder, get_vector_store
 from rag.generation import GeminiLLM, build_prompt
 from rag.retrieval import HybridSearcher
 
@@ -42,7 +42,7 @@ def handle_ask(
     with console.status("[bold green]Thinking...[/bold green]"):
         # 1. 인덱스 로드
         embedder = Embedder()
-        store = VectorStore(dimension=config.embedding.dimension)
+        store = get_vector_store(config)  # 팩토리 함수 사용
         searcher = HybridSearcher(embedder, store)
         
         try:

@@ -1,11 +1,26 @@
 services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: rag-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    restart: unless-stopped
+
   rag:
     build: .
     image: terminal-rag:v1.0.0
     container_name: rag-cli
+    depends_on:
+      - qdrant
     volumes:
       - ./data:/app/data # 데이터(인덱스, 문서) 유지
       - ./.env:/app/.env # API Keys
     working_dir: /app
     # 사용자가 명령어를 오버라이드  수 있도록 함
     entrypoint: [ "python", "-m", "cli.main" ]
+
+volumes:
+  qdrant_data:

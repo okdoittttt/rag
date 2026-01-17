@@ -8,7 +8,7 @@ import pytest
 
 from rag.chunking.chunk import Chunk
 from rag.embedding.embedder import Embedder
-from rag.embedding.store import VectorStore
+from rag.embedding.faiss_store import FAISSStore as VectorStore
 
 
 # 테스트용 임베딩 모델 (매우 작음)
