@@ -6,10 +6,12 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "faiss-cpu>=1.13.2",
+    "kiwipiepy>=0.22.2",
     "numpy>=2.4.1",
     "pydantic>=2.12.5",
     "pytest>=9.0.2",
     "pyyaml>=6.0.3",
+    "rank-bm25>=0.2.2",
     "sentence-transformers>=5.2.0",
     "structlog>=25.5.0",
     "typer>=0.21.1",
