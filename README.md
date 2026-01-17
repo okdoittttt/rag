@@ -103,10 +103,10 @@ CLI 엔트리포인트는 `cli.main` 모듈입니다.
 
 ```bash
 # data/docs 폴더의 모든 문서 인덱싱
-python -m cli.main index ./data/docs
+PYTHONPATH=src python -m cli.main index ./data/docs
 
 # 인덱스 초기화 후 다시 생성
-python -m cli.main index ./data/docs --reset
+PYTHONPATH=src python -m cli.main index ./data/docs --reset
 ```
 
 #### 질문하기 (`rag ask`)
@@ -114,10 +114,10 @@ python -m cli.main index ./data/docs --reset
 인덱스된 문서를 바탕으로 AI가 답변합니다.
 
 ```bash
-python -m cli.main ask "이 프로젝트의 주요 기능은 뭐야?"
+PYTHONPATH=src python -m cli.main ask "이 프로젝트의 주요 기능은 뭐야?"
 
 # 상세 로그 및 검색된 원문 컨텍스트 확인
-python -m cli.main ask "BM25가 뭐야?" --verbose --show-context
+PYTHONPATH=src python -m cli.main ask "BM25가 뭐야?" --verbose --show-context
 ```
 
 #### 검색 결과 확인 (`rag search`)
@@ -125,7 +125,7 @@ python -m cli.main ask "BM25가 뭐야?" --verbose --show-context
 LLM 답변 생성 없이, 검색된 청크(Chunk)를 직접 확인합니다. (디버깅용)
 
 ```bash
-python -m cli.main search "청킹 전략" --top-k 5
+PYTHONPATH=src python -m cli.main search "청킹 전략" --top-k 5
 ```
 
 ## 📁 프로젝트 구조
@@ -152,7 +152,7 @@ terminal-rag/
 ### 1. 기본 질문 (`rag ask`)
 
 ```bash
-$ python -m cli.main ask "RAG의 장점이 뭐야?"
+$ PYTHONPATH=src python -m cli.main ask "RAG의 장점이 뭐야?"
 
 Thinking...
 
@@ -168,7 +168,7 @@ RAG의 주요 장점은 다음과 같습니다 [1]:
 검색 과정(로그)과 답변의 근거가 된 **원문 컨텍스트(Chunk)**를 함께 확인합니다.
 
 ```bash
-$ python -m cli.main ask "Attention이 뭐야?" --verbose --show-context
+$ PYTHONPATH=src python -m cli.main ask "Attention이 뭐야?" --verbose --show-context
 
 ... (로그 생략) ...
 
