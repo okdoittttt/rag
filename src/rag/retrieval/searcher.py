@@ -7,7 +7,7 @@ Weighted Sum 방식을 사용하여 점수를 합산합합니다.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 
@@ -65,6 +65,7 @@ class HybridSearcher:
         query: str,
         top_k: int = 5,
         alpha: float = 0.5,  # 0: BM25 only, 1: Vector only
+        **kwargs: Any,
     ) -> List[Tuple[Chunk, float]]:
         """하이브리드 검색
         
@@ -143,7 +144,13 @@ class HybridSearcher:
         # 최종 정렬
         final_results.sort(key=lambda x: x[1], reverse=True)
         
-        return final_results[:top_k]
+        # 점수 임계값 필터링 (기본값 0.0)
+        filtered_results = [
+            (chunk, score) for chunk, score in final_results 
+            if score >= kwargs.get("score_threshold", 0.0)
+        ]
+        
+        return filtered_results[:top_k]
     
     def save(self, path: Path) -> None:
         """인덱스 저장"""
