@@ -17,9 +17,9 @@ chunking:
   preserve_structure: true
 
 embedding:
-  model: text-embedding-3-small
-  dimension: 1536
-  batch_size: 100
+  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  dimension: 384
+  batch_size: 32
 
 retrieval:
   top_k: 5
