@@ -77,7 +77,7 @@ class OllamaConfig(BaseModel):
 class GenerationConfig(BaseModel):
     """답변 생성 설정"""
     provider: Literal["gemini", "ollama"] = "gemini"
-    model: str = "gemini-2.5-flash"  # 기본 모델 (provider에 따라 무시될 수 있음)
+    model: str | None = Field(default_factory=lambda: os.getenv("GOOGLE_MODEL"))
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1024, ge=1)
     
