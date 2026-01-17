@@ -114,7 +114,7 @@ PYTHONPATH=src python -m cli.main index ./data/docs --reset
 인덱스된 문서를 바탕으로 AI가 답변합니다.
 
 ```bash
-PYTHONPATH=src python -m cli.main ask "이 프로젝트의 주요 기능은 뭐야?"
+PYTHONPATH=src python -m cli.main ask "attention 이란게 뭐야?"
 
 # 상세 로그 및 검색된 원문 컨텍스트 확인
 PYTHONPATH=src python -m cli.main ask "BM25가 뭐야?" --verbose --show-context
@@ -126,6 +126,24 @@ LLM 답변 생성 없이, 검색된 청크(Chunk)를 직접 확인합니다. (�
 
 ```bash
 PYTHONPATH=src python -m cli.main search "청킹 전략" --top-k 5
+```
+
+### 4. Docker로 실행 (권장)
+
+환경 설정 없이 바로 실행하려면 Docker를 사용하세요.
+
+```bash
+# 빌드 및 실행 준비
+docker compose build
+
+# 문서 인덱싱
+docker compose run --rm rag index ./data/sample_docs
+
+# 질문하기
+docker compose run --rm rag ask "Attention이 뭐야?"
+
+# 검색 결과 확인
+docker compose run --rm rag search "컨테이너"
 ```
 
 ## 📁 프로젝트 구조
