@@ -30,6 +30,33 @@ Python으로 구현되었으며, 로컬 임베딩/검색과 Google Gemini API를
 - **CLI 인터페이스**
   - `typer` 및 `rich` 기반의 직관적인 TUI (Spinner, Markdown 출력)
 
+## 🏗️ 시스템 아키텍처
+
+```mermaid
+flowchart TD
+    subgraph Ingestion["📁 문서 인덱싱 (Indexing)"]
+        D[Documents] -->|Load| L(Loader)
+        L -->|Normalize| N(Normalizer)
+        N -->|Split| C(Chunker)
+        C -->|Embed| E(SentenceTransformer)
+        E -->|Vector| V[(FAISS Index)]
+        C -->|Keyword| B[(BM25 Index)]
+    end
+
+    subgraph RAG["🤖 답변 생성 (Retrieval & Generation)"]
+        Q[User Query] -->|Hybrid Search| H{Hybrid Searcher}
+        V --> H
+        B --> H
+        H -->|Scores| R[Result Filtering]
+        R -->|Top-k Chunks| P(Prompt Builder)
+        P -->|Context + Query| LLM(Large Language Model)
+        LLM -->|Generate| A[Final Answer]
+    end
+
+    style Ingestion fill:#f9f9f9,stroke:#333,stroke-width:2px
+    style RAG fill:#e6f3ff,stroke:#333,stroke-width:2px
+```
+
 ## 🛠️ 기술 스택
 
 | 분류 | 기술 | 비고 |
