@@ -9,11 +9,6 @@ wheels/
 # Virtual environments
 .venv
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-
 # IDE
 .idea/
 .vscode/
@@ -24,3 +19,8 @@ __pycache__/
 # Environment variables (민감정보)
 .env
 .env.local
+
+# Project specific
+data/
+logs/
+.pytest_cache/

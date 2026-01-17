@@ -1,0 +1,38 @@
+# Terminal RAG 기본 설정
+# 환경변수로 오버라이드 가능 (RAG_* prefix)
+
+project:
+  name: terminal-rag
+  version: 0.1.0
+  index_path: data/index
+
+ingestion:
+  supported_extensions:
+    - ".txt"
+    - ".md"
+  encoding: utf-8
+
+chunking:
+  chunk_size: 1000        # 자(characters)
+  chunk_overlap: 150      # 10-15%
+  preserve_structure: true
+
+embedding:
+  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  dimension: 384
+  batch_size: 32
+
+retrieval:
+  top_k: 5
+  score_threshold: 0.7
+  search_type: vector     # vector | hybrid
+
+generation:
+  model: gemini-2.5-flash
+  # temperature: 0.1  # 코드에서 직접 제어하거나 필요 시 주석 해제하여 사용
+  # max_tokens: 1024
+
+logging:
+  level: INFO
+  format: json            # json | text
+  file: logs/rag.log
