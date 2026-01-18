@@ -1,3 +1,4 @@
+import React from "react";
 import ReactMarkdown from "react-markdown";
 import { User, Bot, FileText } from "lucide-react";
 
@@ -19,6 +20,12 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message }: ChatMessageProps) {
     const isUser = message.role === "user";
+    const [selectedRef, setSelectedRef] = React.useState<{ content: string; source: string; score: number } | null>(null);
+
+    // Helper to extract filename from path
+    const getFileName = (path: string) => {
+        return path.split(/[/\\]/).pop() || path;
+    };
 
     return (
         <div className={`py-4 ${isUser ? "bg-transparent" : "bg-muted/30"}`}>
@@ -64,13 +71,18 @@ export function ChatMessage({ message }: ChatMessageProps) {
                                     </p>
                                     <div className="flex flex-wrap gap-2">
                                         {message.references.map((ref, idx) => (
-                                            <div
+                                            <button
                                                 key={idx}
-                                                className="text-xs px-2 py-1 bg-muted rounded border cursor-pointer hover:bg-muted/80"
-                                                title={ref.content}
+                                                onClick={() => setSelectedRef(ref)}
+                                                className="text-xs px-2 py-1 bg-muted rounded border hover:bg-muted/80 transition-colors flex items-center gap-1 group"
                                             >
-                                                {ref.source} ({(ref.score * 100).toFixed(0)}%)
-                                            </div>
+                                                <span className="max-w-[150px] truncate text-muted-foreground group-hover:text-foreground">
+                                                    {getFileName(ref.source)}
+                                                </span>
+                                                <span className="text-indigo-500 font-medium">
+                                                    {(ref.score * 100).toFixed(0)}%
+                                                </span>
+                                            </button>
                                         ))}
                                     </div>
                                 </div>
@@ -79,6 +91,40 @@ export function ChatMessage({ message }: ChatMessageProps) {
                     )}
                 </div>
             </div>
+
+            {/* Reference Data Modal */}
+            {selectedRef && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedRef(null)}>
+                    <div
+                        className="bg-background border rounded-lg shadow-lg w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="p-4 border-b flex items-center justify-between bg-muted/20">
+                            <div className="flex items-center gap-2 font-medium truncate">
+                                <FileText size={16} className="text-muted-foreground" />
+                                <span className="truncate">{getFileName(selectedRef.source)}</span>
+                            </div>
+                            <span className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-0.5 rounded-full font-medium">
+                                유사도 {(selectedRef.score * 100).toFixed(0)}%
+                            </span>
+                        </div>
+                        <div className="p-4 overflow-y-auto bg-muted/10 text-sm leading-relaxed whitespace-pre-wrap">
+                            {selectedRef.content}
+                            {selectedRef.content.length >= 500 && (
+                                <p className="mt-4 text-xs text-muted-foreground italic">(일부 내용만 표시됨)</p>
+                            )}
+                        </div>
+                        <div className="p-3 border-t bg-muted/20 flex justify-end">
+                            <button
+                                onClick={() => setSelectedRef(null)}
+                                className="px-4 py-2 text-sm font-medium bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                            >
+                                닫기
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

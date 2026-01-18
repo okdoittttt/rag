@@ -78,7 +78,14 @@ def _search_documents(request: AskRequest) -> tuple[list, list]:
     
     all_results = []
     for q in queries:
-        results = searcher.search(q, top_k=search_top_k, user_id=request.user_id)
+        # 검색 수행
+        results = searcher.search(
+            query=q,
+            top_k=search_top_k,
+            user_id=request.user_id,
+            fusion_type="weighted",
+            alpha=0.7,  # 벡터 검색 가중치 70%
+        )
         all_results.extend(results)
     
     # 중복 제거
@@ -123,8 +130,8 @@ async def ask(request: AskRequest):
     # 참조 정보 구성
     references = [
         ChunkReference(
-            content=chunk.content[:300],
-            source=chunk.metadata.get("filename", "unknown"),
+            content=chunk.content[:500],
+            source=chunk.metadata.get("source", "unknown"),
             score=score,
         )
         for chunk, score in unique_results
@@ -147,8 +154,8 @@ async def ask_stream(request: AskRequest):
     # 참조 정보 (스트림 시작 시 전송)
     references = [
         {
-            "content": chunk.content[:200],
-            "source": chunk.metadata.get("filename", "unknown"),
+            "content": chunk.content[:500],
+            "source": chunk.metadata.get("source", "unknown"),
             "score": score,
         }
         for chunk, score in unique_results

@@ -15,6 +15,7 @@ export default function Home() {
 
   const [isLoading, setIsLoading] = useState(false);
   const [provider, setProvider] = useState<"gemini" | "ollama">("gemini");
+  const [expand, setExpand] = useState(false);  // 검색 확장 상태
   const [mounted, setMounted] = useState(false);
 
   // Only set mounted state, don't auto-create sessions
@@ -53,6 +54,7 @@ export default function Home() {
         query,
         {
           provider,
+          expand,  // 검색 확장 옵션 전달
           user_id: session?.user?.id,
           api_key: provider === "gemini" ? settings.geminiApiKey : undefined,
           model_name: provider === "gemini" ? settings.geminiModel : settings.ollamaModel,
@@ -92,8 +94,23 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="bg-background/95 backdrop-blur p-2 flex justify-start sticky top-0 z-10">
+      <div className="bg-background/95 backdrop-blur p-2 flex justify-between items-center sticky top-0 z-10 border-b">
         <ModelSelector value={provider} onChange={setProvider} disabled={isLoading} />
+
+        {/* 검색 확장 체크박스 */}
+        <div className="flex items-center gap-2 mr-4">
+          <input
+            type="checkbox"
+            id="expand-search"
+            checked={expand}
+            onChange={(e) => setExpand(e.target.checked)}
+            disabled={isLoading}
+            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+          />
+          <label htmlFor="expand-search" className="text-sm font-medium text-muted-foreground cursor-pointer select-none flex items-center gap-1">
+            🔍 검색어 확장(번역)
+          </label>
+        </div>
       </div>
       <ChatList messages={messages} />
       <ChatInput onSubmit={handleSubmit} isLoading={isLoading} />

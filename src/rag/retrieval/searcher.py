@@ -77,8 +77,8 @@ class HybridSearcher:
         self,
         query: str,
         top_k: int = 5,
-        alpha: float = 0.5,  # weighted 방식에서만 사용
-        fusion_type: Literal["rrf", "weighted"] = "rrf",
+        alpha: float = 0.7,  # 기본적으로 벡터 검색 비중 높임
+        fusion_type: Literal["rrf", "weighted"] = "weighted",  # 기본값을 weighted로 변경
         rrf_k: int = 60,
         user_id: str | None = None,  # 사용자 ID 필터
         **kwargs: Any,
@@ -173,9 +173,7 @@ class HybridSearcher:
         """
         # BM25 점수 계산
         bm25_scores = self.bm25.get_full_scores(query)
-        if len(bm25_scores) == 0:
-            return []
-            
+        
         # 벡터 쿼리
         query_vec = self.embedder.embed_query(query)
         
@@ -183,19 +181,25 @@ class HybridSearcher:
         candidates = self.vector_store.search(query_vec, top_k=top_k * 3, user_id=user_id)
         
         if not candidates:
-            return self.bm25.search(query, top_k)
+            # 벡터 결과도 없으면 BM25 검색 시도 (BM25 인덱스가 있을 경우)
+            if len(bm25_scores) > 0:
+                return self.bm25.search(query, top_k)
+            return []
             
         # 점수 결합
         hybrid_results = []
         
         vec_scores = np.array([score for _, score in candidates])
-        norm_vec_scores = min_max_normalize(vec_scores)
+        # 코사인 유사도(-1~1)는 그대로 사용 (상대적 순위보다 절대적 유사도가 중요)
+        norm_vec_scores = vec_scores 
+        # norm_vec_scores = min_max_normalize(vec_scores)
         
         for i, (chunk, _) in enumerate(candidates):
             chunk_idx = chunk.metadata.get("chunk_index")
             current_bm25_score = 0.0
             
-            if chunk_idx is not None and chunk_idx < len(bm25_scores):
+            # BM25 인덱스가 있고 해당 청크가 범위 내에 있을 때만 점수 매핑
+            if len(bm25_scores) > 0 and chunk_idx is not None and chunk_idx < len(bm25_scores):
                 current_bm25_score = bm25_scores[chunk_idx]
                 
             hybrid_results.append({
@@ -204,9 +208,12 @@ class HybridSearcher:
                 "bm25_score": current_bm25_score
             })
             
-        # BM25 점수 정규화
+        # BM25 점수 정규화 (점수가 있는 경우에만)
         cand_bm25_scores = np.array([r["bm25_score"] for r in hybrid_results])
-        norm_bm25_scores = min_max_normalize(cand_bm25_scores)
+        if np.max(cand_bm25_scores) > 0:
+            norm_bm25_scores = min_max_normalize(cand_bm25_scores)
+        else:
+            norm_bm25_scores = np.zeros_like(cand_bm25_scores)
         
         # 최종 점수 계산 및 정렬
         final_results = []

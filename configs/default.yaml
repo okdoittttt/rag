@@ -29,7 +29,7 @@ embedding:
 
 retrieval:
   top_k: 5
-  score_threshold: 0.7
+  score_threshold: 0.4
   search_type: vector     # vector | hybrid
 
 generation:
