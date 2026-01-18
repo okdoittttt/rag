@@ -7,6 +7,7 @@ export interface AskOptions {
     rerank?: boolean;
     expand?: boolean;
     provider?: "gemini" | "ollama";
+    user_id?: string;  // 사용자 ID (격리된 검색용)
 }
 
 export interface ChunkReference {
@@ -42,6 +43,7 @@ export async function askQuestion(
             rerank: options.rerank ?? false,
             expand: options.expand ?? false,
             provider: options.provider ?? "gemini",
+            user_id: options.user_id,
         }),
     });
 
@@ -76,6 +78,7 @@ export async function askQuestionStream(
                 rerank: options.rerank ?? false,
                 expand: options.expand ?? false,
                 provider: options.provider ?? "gemini",
+                user_id: options.user_id,
             }),
         });
 

@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { ChatList, ChatInput, Message } from "@/components/chat";
 import { ModelSelector } from "@/components/chat/ModelSelector";
-import { askQuestion, askQuestionStream } from "@/lib/api";
+import { askQuestionStream } from "@/lib/api";
 
 export default function Home() {
+  const { data: session } = useSession();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [provider, setProvider] = useState<"gemini" | "ollama">("gemini");
@@ -28,10 +30,10 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      // Call actual API with selected provider (Streaming)
+      // Call actual API with selected provider and user_id (Streaming)
       await askQuestionStream(
         query,
-        { provider },
+        { provider, user_id: session?.user?.id },
         (text) => {
           setMessages((prev) =>
             prev.map((m) =>

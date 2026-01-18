@@ -9,6 +9,7 @@ import {
     User,
     PanelLeftClose,
     PanelLeftOpen,
+    Upload,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,10 +43,16 @@ export default function Sidebar() {
                 </button>
                 <button
                     onClick={handleNewChat}
-                    className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg mb-4"
+                    className="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-lg mb-2"
                 >
                     <MessageSquarePlus size={24} />
                 </button>
+                <Link
+                    href="/upload"
+                    className="p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-lg mb-4"
+                >
+                    <Upload size={20} />
+                </Link>
                 <div className="flex-1" />
                 <button
                     onClick={() => setIsSettingsOpen(true)}
@@ -84,8 +91,8 @@ export default function Sidebar() {
                     </button>
                 </div>
 
-                {/* New Chat Button */}
-                <div className="px-4 mb-4">
+                {/* New Chat & Upload Buttons */}
+                <div className="px-4 mb-4 space-y-2">
                     <button
                         onClick={handleNewChat}
                         className="w-full flex items-center justify-between px-4 py-3 bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 hover:text-blue-300 rounded-xl transition border border-blue-500/20 group"
@@ -93,6 +100,13 @@ export default function Sidebar() {
                         <span className="font-medium text-sm">새로운 채팅</span>
                         <MessageSquarePlus size={18} className="group-hover:scale-110 transition" />
                     </button>
+                    <Link
+                        href="/upload"
+                        className="w-full flex items-center justify-between px-4 py-3 bg-green-600/10 hover:bg-green-600/20 text-green-400 hover:text-green-300 rounded-xl transition border border-green-500/20 group"
+                    >
+                        <span className="font-medium text-sm">문서 업로드</span>
+                        <Upload size={18} className="group-hover:scale-110 transition" />
+                    </Link>
                 </div>
 
                 {/* Recent Chats (Scrollable) */}
