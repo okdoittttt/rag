@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
+import { Providers } from "@/components/Providers";
 
 const paperlogy = localFont({
   src: [
@@ -31,12 +32,14 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${paperlogy.variable} antialiased`}>
-        <div className="flex flex-col min-h-screen">
-          <header className="border-b p-4 flex items-center justify-between">
-            <h1 className="font-bold text-xl">Terminal RAG</h1>
-          </header>
-          <main className="flex-1 flex flex-col">{children}</main>
-        </div>
+        <Providers>
+          <div className="flex flex-col min-h-screen">
+            <header className="border-b p-4 flex items-center justify-between">
+              <h1 className="font-bold text-xl">Terminal RAG</h1>
+            </header>
+            <main className="flex-1 flex flex-col">{children}</main>
+          </div>
+        </Providers>
       </body>
     </html>
   );
