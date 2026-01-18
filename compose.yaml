@@ -24,6 +24,10 @@ services:
       - PYTHONPATH=/app/src
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_MODEL=${GOOGLE_MODEL}
     restart: unless-stopped
 
   cli:

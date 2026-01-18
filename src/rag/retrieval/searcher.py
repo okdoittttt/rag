@@ -80,6 +80,7 @@ class HybridSearcher:
         alpha: float = 0.5,  # weighted 방식에서만 사용
         fusion_type: Literal["rrf", "weighted"] = "rrf",
         rrf_k: int = 60,
+        user_id: str | None = None,  # 사용자 ID 필터
         **kwargs: Any,
     ) -> List[Tuple[Chunk, float]]:
         """하이브리드 검색
@@ -90,32 +91,34 @@ class HybridSearcher:
             alpha: 벡터 검색 가중치 (0.0~1.0, weighted 방식에서만 사용)
             fusion_type: 융합 방식 ("rrf" 또는 "weighted")
             rrf_k: RRF 상수 (기본값 60)
+            user_id: 사용자 ID (이 사용자의 문서만 검색)
             
         Returns:
             (청크, 최종 점수) 튜플 리스트
         """
         if fusion_type == "rrf":
-            return self._search_rrf(query, top_k, rrf_k, **kwargs)
+            return self._search_rrf(query, top_k, rrf_k, user_id=user_id, **kwargs)
         else:
-            return self._search_weighted(query, top_k, alpha, **kwargs)
+            return self._search_weighted(query, top_k, alpha, user_id=user_id, **kwargs)
 
     def _search_rrf(
         self,
         query: str,
         top_k: int,
         rrf_k: int = 60,
+        user_id: str | None = None,
         **kwargs: Any,
     ) -> List[Tuple[Chunk, float]]:
         """RRF 방식 하이브리드 검색
         
         두 검색 결과의 순위만 사용하여 점수 스케일에 무관한 통합을 수행합니다.
         """
-        # 1. BM25 검색 (순위용)
+        # 1. BM25 검색 (순위용) - BM25는 user_id 필터 미지원 (추후 확장 가능)
         bm25_results = self.bm25.search(query, top_k=top_k * 2)
         
-        # 2. 벡터 검색 (순위용)
+        # 2. 벡터 검색 (순위용) - user_id 필터 적용
         query_vec = self.embedder.embed_query(query)
-        vec_results = self.vector_store.search(query_vec, top_k=top_k * 2)
+        vec_results = self.vector_store.search(query_vec, top_k=top_k * 2, user_id=user_id)
         
         if not bm25_results and not vec_results:
             return []
@@ -161,6 +164,7 @@ class HybridSearcher:
         query: str,
         top_k: int,
         alpha: float = 0.5,
+        user_id: str | None = None,
         **kwargs: Any,
     ) -> List[Tuple[Chunk, float]]:
         """Weighted Sum 방식 하이브리드 검색 (기존 로직)
@@ -175,8 +179,8 @@ class HybridSearcher:
         # 벡터 쿼리
         query_vec = self.embedder.embed_query(query)
         
-        # 1차 검색 (후보군 추출)
-        candidates = self.vector_store.search(query_vec, top_k=top_k * 3)
+        # 1차 검색 (후보군 추출) - user_id 필터 적용
+        candidates = self.vector_store.search(query_vec, top_k=top_k * 3, user_id=user_id)
         
         if not candidates:
             return self.bm25.search(query, top_k)

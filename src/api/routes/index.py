@@ -32,6 +32,11 @@ async def index_document(request: IndexRequest):
     if not chunks:
         return IndexResponse(message="No chunks created", chunk_count=0)
     
+    # user_id를 각 청크 메타데이터에 추가
+    if request.user_id:
+        for chunk in chunks:
+            chunk.metadata["user_id"] = request.user_id
+    
     # 인덱스에 추가
     searcher = get_searcher()
     searcher.index(chunks)
@@ -42,6 +47,6 @@ async def index_document(request: IndexRequest):
     searcher.save(index_path)
     
     return IndexResponse(
-        message=f"Successfully indexed {len(chunks)} chunks",
+        message=f"Successfully indexed {len(chunks)} chunks for user {request.user_id or 'anonymous'}",
         chunk_count=len(chunks),
     )

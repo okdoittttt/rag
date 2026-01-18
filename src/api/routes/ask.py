@@ -73,12 +73,12 @@ def _search_documents(request: AskRequest) -> tuple[list, list]:
     else:
         queries = [request.query]
     
-    # 검색
+    # 검색 (user_id 필터 적용)
     search_top_k = request.top_k * 3 if request.rerank else request.top_k * 2
     
     all_results = []
     for q in queries:
-        results = searcher.search(q, top_k=search_top_k)
+        results = searcher.search(q, top_k=search_top_k, user_id=request.user_id)
         all_results.extend(results)
     
     # 중복 제거

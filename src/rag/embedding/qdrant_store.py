@@ -101,6 +101,7 @@ class QdrantStore(VectorStoreBase):
                 "start_char": chunk.metadata.get("start_char", 0),
                 "end_char": chunk.metadata.get("end_char", 0),
                 "header_path": chunk.metadata.get("header_path", ""),
+                "user_id": chunk.metadata.get("user_id", ""),  # 사용자 ID 추가
                 "metadata": chunk.metadata,
             }
             points.append(
@@ -136,16 +137,35 @@ class QdrantStore(VectorStoreBase):
         )
     
     def search(
-        self, query_embedding: np.ndarray, top_k: int = 5
+        self, query_embedding: np.ndarray, top_k: int = 5, user_id: str | None = None
     ) -> list[tuple[Chunk, float]]:
-        """유사한 청크 검색"""
+        """유사한 청크 검색
+        
+        Args:
+            query_embedding: 쿼리 벡터
+            top_k: 반환할 결과 수
+            user_id: 사용자 ID (None이면 필터 없음)
+        """
         # 쿼리 벡터 준비
         query_vector = query_embedding[0].tolist() if query_embedding.ndim == 2 else query_embedding.tolist()
+        
+        # 사용자 ID 필터 설정
+        query_filter = None
+        if user_id:
+            query_filter = models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="user_id",
+                        match=models.MatchValue(value=user_id),
+                    )
+                ]
+            )
         
         # 검색 (query_points API 사용 - qdrant-client 1.10+)
         results = self.client.query_points(
             collection_name=self.collection_name,
             query=query_vector,
+            query_filter=query_filter,
             limit=top_k,
         )
         
