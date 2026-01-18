@@ -19,6 +19,7 @@ model User {
   image         String?
   accounts      Account[]
   sessions      Session[]
+  documents     Document[]
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }
@@ -56,4 +57,17 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  filename    String
+  filepath    String   // 저장된 파일 경로
+  filesize    Int      // 바이트 단위
+  mimetype    String   @default("text/plain")
+  chunkCount  Int      @default(0)  // 인덱싱된 청크 수
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

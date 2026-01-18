@@ -10,6 +10,7 @@ import {
     PanelLeftClose,
     PanelLeftOpen,
     Upload,
+    FileText,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -49,9 +50,15 @@ export default function Sidebar() {
                 </button>
                 <Link
                     href="/upload"
-                    className="p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-lg mb-4"
+                    className="p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-lg mb-2"
                 >
                     <Upload size={20} />
+                </Link>
+                <Link
+                    href="/documents"
+                    className="p-2 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 rounded-lg mb-4"
+                >
+                    <FileText size={20} />
                 </Link>
                 <div className="flex-1" />
                 <button
@@ -106,6 +113,13 @@ export default function Sidebar() {
                     >
                         <span className="font-medium text-sm">문서 업로드</span>
                         <Upload size={18} className="group-hover:scale-110 transition" />
+                    </Link>
+                    <Link
+                        href="/documents"
+                        className="w-full flex items-center justify-between px-4 py-3 bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 hover:text-purple-300 rounded-xl transition border border-purple-500/20 group"
+                    >
+                        <span className="font-medium text-sm">내 문서</span>
+                        <FileText size={18} className="group-hover:scale-110 transition" />
                     </Link>
                 </div>
 
