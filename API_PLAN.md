@@ -12,15 +12,15 @@ RAG 시스템을 FastAPI 기반 REST API로 확장하는 단계별 구현 계획
 - [x] 의존성 추가 (`fastapi`, `uvicorn`)
 - [x] 기본 Health Check 엔드포인트 구현
 
-### Phase 2: 핵심 엔드포인트 구현
-- [ ] **POST /ask** - 질문-답변 (RAG 파이프라인 전체 실행)
-- [ ] **POST /search** - 검색만 수행 (답변 생성 없이 관련 문서 반환)
-- [ ] **POST /index** - 문서 인덱싱 (파일 업로드 또는 텍스트 직접 전달)
+### Phase 2: 핵심 엔드포인트 구현 ✅
+- [x] **POST /ask** - 질문-답변 (RAG 파이프라인 전체 실행)
+- [x] **POST /search** - 검색만 수행 (답변 생성 없이 관련 문서 반환)
+- [x] **POST /index** - 문서 인덱싱 (파일 업로드 또는 텍스트 직접 전달)
 
-### Phase 3: 스키마 및 설정
-- [ ] Pydantic Request/Response 스키마 정의 (`src/api/schemas.py`)
-- [ ] CORS 미들웨어 설정
-- [ ] 에러 핸들링 및 표준 응답 포맷
+### Phase 3: 스키마 및 설정 ✅
+- [x] Pydantic Request/Response 스키마 정의 (`src/api/schemas.py`)
+- [x] CORS 미들웨어 설정
+- [x] 에러 핸들링 및 표준 응답 포맷 (`src/api/exceptions.py`)
 
 ### Phase 4: 스트리밍 응답 (선택)
 - [ ] SSE(Server-Sent Events) 기반 스트리밍 답변
@@ -74,5 +74,8 @@ src/
 | Phase 5 | 1시간 |
 
 ---
-
+src/api/schemas.py - Pydantic 스키마
+src/api/routes/ask.py - /ask 엔드포인트
+src/api/routes/search.py - /search 엔드포인트
+src/api/routes/index.py - /index 엔드포인트
 *작성일: 2026-01-18*
