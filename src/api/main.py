@@ -14,8 +14,15 @@ from api.exceptions import RAGException
 
 app = FastAPI(
     title="Terminal RAG API",
-    description="Document Q&A with RAG pipeline",
+    description="RAG 기반 문서 Q&A API. 문서를 인덱싱하고 질문에 답변합니다.",
     version="0.1.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_tags=[
+        {"name": "QA", "description": "질문-답변 (일반 및 스트리밍)"},
+        {"name": "Search", "description": "문서 검색"},
+        {"name": "Index", "description": "문서 인덱싱"},
+    ]
 )
 
 # CORS 설정

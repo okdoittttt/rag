@@ -26,10 +26,10 @@ RAG 시스템을 FastAPI 기반 REST API로 확장하는 단계별 구현 계획
 - [x] SSE(Server-Sent Events) 기반 스트리밍 답변
 - [x] `/ask/stream` 엔드포인트 추가
 
-### Phase 5: 배포 준비
-- [ ] Docker Compose에 API 서비스 추가
-- [ ] 환경변수 기반 설정 분리
-- [ ] Swagger 문서 확인 및 정리
+### Phase 5: 배포 준비 ✅
+- [x] Docker Compose에 API 서비스 추가
+- [x] 환경변수 기반 설정 분리 (`.env.docker`)
+- [x] Swagger 문서 자동 생성 (openapi_tags)
 
 ---
 
