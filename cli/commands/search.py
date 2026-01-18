@@ -11,7 +11,7 @@ from rich.console import Console
 from rich.table import Table
 
 from rag.config import get_config
-from rag.embedding import Embedder, VectorStore
+from rag.embedding import Embedder, get_vector_store
 from rag.retrieval import HybridSearcher
 
 
@@ -37,7 +37,7 @@ def handle_search(
         console.print("[red]Error:[/red] Index not found. Please run 'rag index' first.")
         raise typer.Exit(code=1)
 
-    searcher = HybridSearcher(Embedder(), VectorStore(config.embedding.dimension))
+    searcher = HybridSearcher(Embedder(), get_vector_store(config))  # 팩토리 사용
     try:
         searcher.load(index_path)
     except Exception as e:

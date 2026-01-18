@@ -45,9 +45,39 @@ def chunk_document(doc: Document) -> list[Chunk]:
         )
 
 
+def chunk_text(
+    text: str,
+    filename: str = "uploaded",
+    chunk_size: int | None = None,
+    chunk_overlap: int | None = None,
+) -> list[Chunk]:
+    """텍스트를 청크로 분할 (API용 헬퍼)
+    
+    Args:
+        text: 분할할 텍스트
+        filename: 파일명 (메타데이터용)
+        chunk_size: 청크 크기 (None이면 config 사용)
+        chunk_overlap: 오버랩 크기 (None이면 config 사용)
+        
+    Returns:
+        Chunk 리스트
+    """
+    config = get_config()
+    size = chunk_size or config.chunking.chunk_size
+    overlap = chunk_overlap or config.chunking.chunk_overlap
+    
+    return split_text(
+        text,
+        chunk_size=size,
+        chunk_overlap=overlap,
+        source=filename,
+    )
+
+
 __all__ = [
     "Chunk",
     "split_text",
     "split_markdown",
     "chunk_document",
+    "chunk_text",
 ]

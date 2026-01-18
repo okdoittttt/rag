@@ -1,13 +1,13 @@
 """하이브리드 검색 모듈
 
 BM25(키워드)와 Vector(의미) 검색 결과를 결합합니다.
-Weighted Sum 방식을 사용하여 점수를 합산합합니다.
+RRF(Reciprocal Rank Fusion) 또는 Weighted Sum 방식을 지원합니다.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, List, Tuple
+from typing import Any, List, Literal, Tuple
 
 import numpy as np
 
@@ -33,6 +33,19 @@ def min_max_normalize(scores: np.ndarray) -> np.ndarray:
         return np.zeros_like(scores)
         
     return (scores - min_val) / (max_val - min_val)
+
+
+def rrf_score(rank: int, k: int = 60) -> float:
+    """RRF 점수 계산
+    
+    Args:
+        rank: 순위 (1부터 시작)
+        k: 상수 (기본값 60, 논문 권장값)
+        
+    Returns:
+        RRF 점수: 1 / (k + rank)
+    """
+    return 1.0 / (k + rank)
 
 
 class HybridSearcher:
@@ -64,61 +77,117 @@ class HybridSearcher:
         self,
         query: str,
         top_k: int = 5,
-        alpha: float = 0.5,  # 0: BM25 only, 1: Vector only
+        alpha: float = 0.5,  # weighted 방식에서만 사용
+        fusion_type: Literal["rrf", "weighted"] = "rrf",
+        rrf_k: int = 60,
         **kwargs: Any,
     ) -> List[Tuple[Chunk, float]]:
         """하이브리드 검색
         
-        Score = alpha * Vector_Score + (1 - alpha) * BM25_Score
-        (각 점수는 정규화됨)
-        
         Args:
             query: 검색 쿼리
             top_k: 반환 개수
-            alpha: 벡터 검색 가중치 (0.0 ~ 1.0)
+            alpha: 벡터 검색 가중치 (0.0~1.0, weighted 방식에서만 사용)
+            fusion_type: 융합 방식 ("rrf" 또는 "weighted")
+            rrf_k: RRF 상수 (기본값 60)
             
         Returns:
             (청크, 최종 점수) 튜플 리스트
         """
-        # 0. BM25 점수 계산
+        if fusion_type == "rrf":
+            return self._search_rrf(query, top_k, rrf_k, **kwargs)
+        else:
+            return self._search_weighted(query, top_k, alpha, **kwargs)
+
+    def _search_rrf(
+        self,
+        query: str,
+        top_k: int,
+        rrf_k: int = 60,
+        **kwargs: Any,
+    ) -> List[Tuple[Chunk, float]]:
+        """RRF 방식 하이브리드 검색
+        
+        두 검색 결과의 순위만 사용하여 점수 스케일에 무관한 통합을 수행합니다.
+        """
+        # 1. BM25 검색 (순위용)
+        bm25_results = self.bm25.search(query, top_k=top_k * 2)
+        
+        # 2. 벡터 검색 (순위용)
+        query_vec = self.embedder.embed_query(query)
+        vec_results = self.vector_store.search(query_vec, top_k=top_k * 2)
+        
+        if not bm25_results and not vec_results:
+            return []
+        
+        # 3. RRF 점수 계산
+        # chunk_id -> (chunk, rrf_score) 매핑
+        rrf_scores: dict[int, tuple[Chunk, float]] = {}
+        
+        # BM25 결과에 RRF 점수 부여
+        for rank, (chunk, _) in enumerate(bm25_results, start=1):
+            chunk_id = chunk.metadata.get("chunk_index", id(chunk))
+            score = rrf_score(rank, rrf_k)
+            if chunk_id in rrf_scores:
+                rrf_scores[chunk_id] = (chunk, rrf_scores[chunk_id][1] + score)
+            else:
+                rrf_scores[chunk_id] = (chunk, score)
+        
+        # 벡터 결과에 RRF 점수 부여
+        for rank, (chunk, _) in enumerate(vec_results, start=1):
+            chunk_id = chunk.metadata.get("chunk_index", id(chunk))
+            score = rrf_score(rank, rrf_k)
+            if chunk_id in rrf_scores:
+                rrf_scores[chunk_id] = (chunk, rrf_scores[chunk_id][1] + score)
+            else:
+                rrf_scores[chunk_id] = (chunk, score)
+        
+        # 4. 점수순 정렬
+        final_results = list(rrf_scores.values())
+        final_results.sort(key=lambda x: x[1], reverse=True)
+        
+        logger.debug(
+            "rrf_search_completed",
+            query_preview=query[:30],
+            bm25_count=len(bm25_results),
+            vec_count=len(vec_results),
+            merged_count=len(final_results),
+        )
+        
+        return final_results[:top_k]
+
+    def _search_weighted(
+        self,
+        query: str,
+        top_k: int,
+        alpha: float = 0.5,
+        **kwargs: Any,
+    ) -> List[Tuple[Chunk, float]]:
+        """Weighted Sum 방식 하이브리드 검색 (기존 로직)
+        
+        Score = alpha * Vector_Score + (1 - alpha) * BM25_Score
+        """
+        # BM25 점수 계산
         bm25_scores = self.bm25.get_full_scores(query)
         if len(bm25_scores) == 0:
             return []
             
-        # 1. 벡터 검색 및 점수 계산
-        # FAISS는 top_k만 반환하므로, 전체 점수를 얻기 위해선
-        # 사실 모든 벡터와의 유사도를 계산해야 정확한 하이브리드가 가능함.
-        # 하지만 성능상, 여기서는 편의상 검색된 청크들만 대상으로 재정렬하거나,
-        # VectorStore가 전체 점수를 반환하도록 기능을 확장해야 함.
-        #
-        # 현실적인 대안 (RRF 또는 상위 k개 풀링):
-        # 여기서는 VectorStore에서 top_k * 2 개를 가져오고, 
-        # 그 청크들에 대해서만 BM25 점수를 합산하는 방식(Reranking)을 사용.
-        
         # 벡터 쿼리
         query_vec = self.embedder.embed_query(query)
         
-        # 1차 검색 (후보군 추출): 벡터 기준 top_k * 3
+        # 1차 검색 (후보군 추출)
         candidates = self.vector_store.search(query_vec, top_k=top_k * 3)
         
         if not candidates:
-            # 벡터 실패 시 BM25만 반환
             return self.bm25.search(query, top_k)
             
-        # 2. 점수 결합
+        # 점수 결합
         hybrid_results = []
         
-        # 벡터 점수 정규화용
         vec_scores = np.array([score for _, score in candidates])
         norm_vec_scores = min_max_normalize(vec_scores)
         
-        # 해당 후보들에 대한 BM25 점수 가져오기
-        # BM25Searcher의 chunks와 VectorStore의 chunks 인덱스가 동일하다고 가정
-        # (index 메서드에서 함께 추가했으므로)
-        
         for i, (chunk, _) in enumerate(candidates):
-            # 원본 인덱스 찾기 (VectorStore가 인덱스를 반환하지 않아 chunk 객체로 매핑 필요)
-            # 여기서는 편의상 chunk.metadata['chunk_index'] 활용
             chunk_idx = chunk.metadata.get("chunk_index")
             current_bm25_score = 0.0
             
@@ -141,10 +210,9 @@ class HybridSearcher:
             final_score = (alpha * res["vec_score"]) + ((1 - alpha) * norm_bm25_scores[i])
             final_results.append((res["chunk"], final_score))
             
-        # 최종 정렬
         final_results.sort(key=lambda x: x[1], reverse=True)
         
-        # 점수 임계값 필터링 (기본값 0.0)
+        # 점수 임계값 필터링
         filtered_results = [
             (chunk, score) for chunk, score in final_results 
             if score >= kwargs.get("score_threshold", 0.0)

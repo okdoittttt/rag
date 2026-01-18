@@ -39,12 +39,21 @@ class ChunkingConfig(BaseModel):
     preserve_structure: bool = True
 
 
+class QdrantConfig(BaseModel):
+    """Qdrant 서버 설정"""
+    host: str = "localhost"
+    port: int = 6333
+    collection: str = "terminal-rag"
+
+
 class EmbeddingConfig(BaseModel):
     """임베딩 설정"""
     # model: str = "text-embedding-3-small"
     model: str = "sentence-transformers/all-MiniLM-L6-v2"
     dimension: int = 384
     batch_size: int = Field(default=100, ge=1)
+    store_type: Literal["faiss", "qdrant"] = "faiss"
+    qdrant: QdrantConfig = Field(default_factory=QdrantConfig)
 
 
 class RetrievalConfig(BaseModel):
@@ -52,13 +61,32 @@ class RetrievalConfig(BaseModel):
     top_k: int = Field(default=5, ge=1, le=100)
     score_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     search_type: Literal["vector", "hybrid"] = "vector"
+    # Hybrid Search 융합 설정
+    fusion_type: Literal["rrf", "weighted"] = "rrf"
+    rrf_k: int = Field(default=20, ge=1, le=100)
+    # Reranker 설정
+    use_reranker: bool = False
+    reranker_model: str = "BAAI/bge-reranker-v2-m3"
+
+
+
+class OllamaConfig(BaseModel):
+    """Ollama 설정"""
+    # 기본값을 제거하여 환경변수 설정을 유도하거나, 명시적으로 로컬호스트임을 인지하고 사용하도록 함
+    # 실운영 환경에서는 반드시 환경변수로 주입받아야 함
+    base_url: str | None = Field(default_factory=lambda: os.getenv("OLLAMA_BASE_URL"))
+    model: str | None = Field(default_factory=lambda: os.getenv("OLLAMA_MODEL"))
 
 
 class GenerationConfig(BaseModel):
     """답변 생성 설정"""
-    model: str = "gemini-2.5-flash"
+    provider: Literal["gemini", "ollama"] = "gemini"
+    model: str | None = Field(default_factory=lambda: os.getenv("GOOGLE_MODEL"))
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
     max_tokens: int = Field(default=1024, ge=1)
+    
+    # Provider-specific configs
+    ollama: OllamaConfig = Field(default_factory=OllamaConfig)
 
 
 class LoggingConfig(BaseModel):

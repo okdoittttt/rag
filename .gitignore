@@ -23,4 +23,5 @@ wheels/
 # Project specific
 data/
 logs/
+docs/
 .pytest_cache/

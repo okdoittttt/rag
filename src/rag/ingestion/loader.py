@@ -22,30 +22,6 @@ def _is_supported_file(path: Path, extensions: list[str]) -> bool:
     return path.is_file() and path.suffix.lower() in extensions
 
 
-def _read_file_content(path: Path, encoding: str = "utf-8") -> str | None:
-    """파일 내용 읽기
-    
-    Args:
-        path: 파일 경로
-        encoding: 인코딩 (기본: utf-8)
-        
-    Returns:
-        파일 내용 또는 None (읽기 실패 시)
-    """
-    try:
-        return path.read_text(encoding=encoding)
-    except UnicodeDecodeError:
-        # UTF-8 실패 시 latin-1 시도
-        try:
-            return path.read_text(encoding="latin-1")
-        except Exception as e:
-            logger.warning("file_read_fallback_failed", path=str(path), error=str(e))
-            return None
-    except Exception as e:
-        logger.warning("file_read_failed", path=str(path), error=str(e))
-        return None
-
-
 def load_file(path: Path, normalize: bool = True) -> Document | None:
     """단일 파일 로딩
     
@@ -56,10 +32,17 @@ def load_file(path: Path, normalize: bool = True) -> Document | None:
     Returns:
         Document 또는 None (로딩 실패 시)
     """
-    config = get_config()
+    from rag.ingestion.parsers import get_parser
     
-    content = _read_file_content(path, config.ingestion.encoding)
-    if content is None:
+    # 파서 가져오기
+    parser = get_parser(path)
+    if parser is None:
+        logger.warning("no_parser_found", path=str(path), extension=path.suffix)
+        return None
+    
+    # 파싱
+    content = parser.parse(path)
+    if not content:
         return None
     
     # 정규화
@@ -77,6 +60,7 @@ def load_file(path: Path, normalize: bool = True) -> Document | None:
         filename=doc.metadata["filename"],
         length=len(doc),
         language=doc.metadata["language"],
+        parser=parser.__class__.__name__,
     )
     
     return doc

@@ -1,10 +1,11 @@
-"""벡터 저장소 모듈
+"""FAISS 기반 벡터 저장소
 
-FAISS를 사용하여 임베딩 벡터를 저장하고 검색합니다.
+로컬 파일 시스템에 인덱스를 저장하는 FAISS 구현체입니다.
 """
 
 from __future__ import annotations
 
+import json
 import pickle
 from pathlib import Path
 
@@ -12,13 +13,14 @@ import faiss
 import numpy as np
 
 from rag.chunking.chunk import Chunk
+from rag.embedding.base import VectorStoreBase
 from rag.logger import get_logger
 
 
 logger = get_logger(__name__)
 
 
-class VectorStore:
+class FAISSStore(VectorStoreBase):
     """FAISS 기반 벡터 저장소"""
     
     def __init__(self, dimension: int):
@@ -112,9 +114,8 @@ class VectorStore:
             
         # 설정 저장 (차원 정보)
         meta_path = path / "meta.json"
-        import json
         with open(meta_path, "w", encoding="utf-8") as f:
-            json.dump({"dimension": self.dimension}, f)
+            json.dump({"dimension": self.dimension, "store_type": "faiss"}, f)
             
         logger.info("index_saved", path=str(path), total_chunks=len(self.chunks))
         
@@ -141,7 +142,6 @@ class VectorStore:
         # 차원 정보 확인 (일치하지 않으면 경고)
         meta_path = path / "meta.json"
         if meta_path.exists():
-            import json
             with open(meta_path, "r", encoding="utf-8") as f:
                 meta = json.load(f)
                 if meta.get("dimension") != self.dimension:
@@ -150,10 +150,19 @@ class VectorStore:
                         expected=self.dimension,
                         loaded=meta.get("dimension"),
                     )
-                    # 필요한 경우 self.dimension = meta["dimension"] 업데이트 고려
             
         logger.info("index_loaded", path=str(path), total_chunks=len(self.chunks))
 
     @property
     def total_chunks(self) -> int:
         return len(self.chunks)
+    
+    def clear(self) -> None:
+        """저장소 초기화"""
+        self.index = faiss.IndexFlatIP(self.dimension)
+        self.chunks = []
+        logger.info("index_cleared")
+
+
+# 하위 호환성을 위한 별칭
+VectorStore = FAISSStore
