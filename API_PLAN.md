@@ -22,9 +22,9 @@ RAG 시스템을 FastAPI 기반 REST API로 확장하는 단계별 구현 계획
 - [x] CORS 미들웨어 설정
 - [x] 에러 핸들링 및 표준 응답 포맷 (`src/api/exceptions.py`)
 
-### Phase 4: 스트리밍 응답 (선택)
-- [ ] SSE(Server-Sent Events) 기반 스트리밍 답변
-- [ ] `/ask/stream` 엔드포인트 추가
+### Phase 4: 스트리밍 응답 (선택) ✅
+- [x] SSE(Server-Sent Events) 기반 스트리밍 답변
+- [x] `/ask/stream` 엔드포인트 추가
 
 ### Phase 5: 배포 준비
 - [ ] Docker Compose에 API 서비스 추가

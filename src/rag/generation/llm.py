@@ -1,6 +1,7 @@
 """LLM 인터페이스 및 구현체
 
 Google Gemini API 및 Ollama를 사용하는 LLM 구현체를 제공합니다.
+스트리밍 응답도 지원합니다.
 """
 
 from __future__ import annotations
@@ -8,7 +9,7 @@ from __future__ import annotations
 import os
 import json
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Iterator, Optional
 
 import requests
 import google.generativeai as genai
@@ -30,6 +31,11 @@ class LLM(ABC):
     @abstractmethod
     def generate(self, prompt: str) -> str:
         """프롬프트에 대한 응답 생성"""
+        pass
+    
+    @abstractmethod
+    def generate_stream(self, prompt: str) -> Iterator[str]:
+        """스트리밍 응답 생성"""
         pass
 
 
@@ -77,6 +83,23 @@ class GeminiLLM(LLM):
             logger.error("gemini_generation_failed", error=str(e))
             return f"오류 발생: {str(e)}"
 
+    def generate_stream(self, prompt: str) -> Iterator[str]:
+        """Gemini 스트리밍 응답 생성"""
+        try:
+            logger.debug("gemini_streaming", prompt_length=len(prompt))
+            response = self.model.generate_content(prompt, stream=True)
+            
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+                    
+        except exceptions.GoogleAPIError as e:
+            logger.error("gemini_stream_error", error=str(e))
+            yield f"API 오류: {str(e)}"
+        except Exception as e:
+            logger.error("gemini_stream_failed", error=str(e))
+            yield f"오류 발생: {str(e)}"
+
 
 class OllamaLLM(LLM):
     """Ollama API 구현체"""
@@ -122,6 +145,43 @@ class OllamaLLM(LLM):
         except Exception as e:
             logger.error("ollama_generation_failed", error=str(e))
             return f"오류 발생: {str(e)}"
+
+    def generate_stream(self, prompt: str) -> Iterator[str]:
+        """Ollama 스트리밍 응답 생성"""
+        try:
+            logger.debug("ollama_streaming", model=self.model, prompt_length=len(prompt))
+            
+            payload = {
+                "model": self.model,
+                "prompt": prompt,
+                "stream": True,
+                "options": {
+                    "temperature": 0.1,
+                    "num_predict": 1024,
+                }
+            }
+            
+            response = requests.post(
+                f"{self.base_url}/api/generate",
+                json=payload,
+                stream=True,
+                timeout=120
+            )
+            response.raise_for_status()
+            
+            for line in response.iter_lines():
+                if line:
+                    data = json.loads(line)
+                    text = data.get("response", "")
+                    if text:
+                        yield text
+                        
+        except requests.exceptions.RequestException as e:
+            logger.error("ollama_stream_error", error=str(e))
+            yield f"Ollama 연결 오류: {str(e)}"
+        except Exception as e:
+            logger.error("ollama_stream_failed", error=str(e))
+            yield f"오류 발생: {str(e)}"
 
 
 def get_llm(provider: str | None = None) -> LLM:

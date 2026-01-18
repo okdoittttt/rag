@@ -1,11 +1,14 @@
 """Ask 라우터
 
-질문-답변 엔드포인트
+질문-답변 엔드포인트 (일반 및 스트리밍)
 """
 
+import json
 from pathlib import Path
+from typing import AsyncIterator
 
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from api.schemas import AskRequest, AskResponse, ChunkReference
 from api.exceptions import IndexNotFoundError
@@ -48,9 +51,12 @@ def get_reranker_instance() -> Reranker:
     return _reranker
 
 
-@router.post("/ask", response_model=AskResponse)
-async def ask(request: AskRequest):
-    """질문에 대한 답변 생성"""
+def _search_documents(request: AskRequest) -> tuple[list, list]:
+    """검색 로직 공통 함수
+    
+    Returns:
+        (chunks, unique_results) 튜플
+    """
     config = get_config()
     index_path = Path(config.project.index_path)
     
@@ -93,6 +99,14 @@ async def ask(request: AskRequest):
     
     chunks = [r[0] for r in unique_results[:request.top_k]]
     
+    return chunks, unique_results[:request.top_k]
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask(request: AskRequest):
+    """질문에 대한 답변 생성"""
+    chunks, unique_results = _search_documents(request)
+    
     if not chunks:
         return AskResponse(answer="관련 문서를 찾을 수 없습니다.", references=[])
     
@@ -108,7 +122,45 @@ async def ask(request: AskRequest):
             source=chunk.metadata.get("filename", "unknown"),
             score=score,
         )
-        for chunk, score in unique_results[:request.top_k]
+        for chunk, score in unique_results
     ]
     
     return AskResponse(answer=answer, references=references)
+
+
+@router.post("/ask/stream")
+async def ask_stream(request: AskRequest):
+    """스트리밍 방식으로 답변 생성 (SSE)"""
+    chunks, unique_results = _search_documents(request)
+    
+    if not chunks:
+        async def empty_response():
+            yield f"data: {json.dumps({'text': '관련 문서를 찾을 수 없습니다.'})}\n\n"
+            yield "data: [DONE]\n\n"
+        return StreamingResponse(empty_response(), media_type="text/event-stream")
+    
+    # 참조 정보 (스트림 시작 시 전송)
+    references = [
+        {
+            "content": chunk.content[:200],
+            "source": chunk.metadata.get("filename", "unknown"),
+            "score": score,
+        }
+        for chunk, score in unique_results
+    ]
+    
+    prompt = build_prompt(request.query, chunks)
+    llm = get_llm(request.provider)
+    
+    async def generate():
+        # 먼저 참조 정보 전송
+        yield f"data: {json.dumps({'references': references})}\n\n"
+        
+        # 스트리밍 응답 생성
+        for chunk_text in llm.generate_stream(prompt):
+            yield f"data: {json.dumps({'text': chunk_text})}\n\n"
+        
+        # 완료 신호
+        yield "data: [DONE]\n\n"
+    
+    return StreamingResponse(generate(), media_type="text/event-stream")
