@@ -18,6 +18,7 @@ interface ChatStore {
     setCurrentSession: (id: string) => void;
     addMessage: (sessionId: string, message: Message) => void;
     updateMessage: (sessionId: string, messageId: string, updates: Partial<Message>) => void;
+    appendMessageContent: (sessionId: string, messageId: string, content: string) => void;
     updateSessionTitle: (sessionId: string, title: string) => void;
     deleteSession: (sessionId: string) => void;
     clearSessions: () => void;
@@ -80,6 +81,24 @@ export const useChatStore = create<ChatStore>()(
 
                     const updatedMessages = session.messages.map((msg) =>
                         msg.id === messageId ? { ...msg, ...updates } : msg
+                    );
+
+                    return {
+                        sessions: {
+                            ...state.sessions,
+                            [sessionId]: { ...session, messages: updatedMessages, updatedAt: Date.now() },
+                        },
+                    };
+                });
+            },
+
+            appendMessageContent: (sessionId, messageId, content) => {
+                set((state) => {
+                    const session = state.sessions[sessionId];
+                    if (!session) return state;
+
+                    const updatedMessages = session.messages.map((msg) =>
+                        msg.id === messageId ? { ...msg, content: msg.content + content } : msg
                     );
 
                     return {

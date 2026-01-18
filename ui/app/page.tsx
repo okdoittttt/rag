@@ -59,9 +59,7 @@ export default function Home() {
           base_url: provider === "ollama" ? settings.ollamaBaseUrl : undefined,
         },
         (text) => {
-          chatStore.updateMessage(sessionId, botId, {
-            content: (chatStore.sessions[sessionId]?.messages.find(m => m.id === botId)?.content || "") + text
-          });
+          chatStore.appendMessageContent(sessionId, botId, text);
         },
         (refs) => {
           chatStore.updateMessage(sessionId, botId, { references: refs });
