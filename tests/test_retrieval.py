@@ -7,7 +7,7 @@ import pytest
 
 from rag.chunking.chunk import Chunk
 from rag.embedding.embedder import Embedder
-from rag.embedding.store import VectorStore
+from rag.embedding import VectorStore
 from rag.retrieval.bm25 import BM25Searcher
 from rag.retrieval.searcher import HybridSearcher
 from rag.retrieval.tokenizer import tokenize_query
@@ -128,3 +128,37 @@ class TestHybridSearcher:
         
         results = new_searcher.search("하늘")
         assert len(results) > 0
+
+    def test_rrf_fusion_basic(self, hybrid_searcher, sample_chunks):
+        """RRF 융합 방식 기본 동작 테스트"""
+        hybrid_searcher.index(sample_chunks)
+        
+        # RRF 방식으로 검색
+        results = hybrid_searcher.search("사과", top_k=2, fusion_type="rrf")
+        
+        assert isinstance(results, list)
+        assert len(results) <= 2
+        # RRF 점수는 0보다 커야 함
+        if results:
+            assert results[0][1] > 0
+
+    def test_rrf_vs_weighted(self, hybrid_searcher, sample_chunks):
+        """RRF와 Weighted 방식 결과 비교 (둘 다 동작해야 함)"""
+        hybrid_searcher.index(sample_chunks)
+        
+        rrf_results = hybrid_searcher.search("과일", fusion_type="rrf")
+        weighted_results = hybrid_searcher.search("과일", fusion_type="weighted")
+        
+        assert isinstance(rrf_results, list)
+        assert isinstance(weighted_results, list)
+
+    def test_rrf_k_parameter(self, hybrid_searcher, sample_chunks):
+        """RRF k 파라미터 테스트"""
+        hybrid_searcher.index(sample_chunks)
+        
+        # 다른 k 값으로 검색
+        results_k60 = hybrid_searcher.search("사과", fusion_type="rrf", rrf_k=60)
+        results_k10 = hybrid_searcher.search("사과", fusion_type="rrf", rrf_k=10)
+        
+        assert isinstance(results_k60, list)
+        assert isinstance(results_k10, list)

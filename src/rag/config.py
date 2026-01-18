@@ -61,9 +61,13 @@ class RetrievalConfig(BaseModel):
     top_k: int = Field(default=5, ge=1, le=100)
     score_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
     search_type: Literal["vector", "hybrid"] = "vector"
+    # Hybrid Search 융합 설정
+    fusion_type: Literal["rrf", "weighted"] = "rrf"
+    rrf_k: int = Field(default=20, ge=1, le=100)
     # Reranker 설정
     use_reranker: bool = False
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
+
 
 
 class OllamaConfig(BaseModel):

@@ -13,7 +13,7 @@
 | 2 | 🔌 다중 임베딩 모델 | Provider 추상화 (SentenceTransformers, OpenAI, Cohere 등) | ⭐⭐⭐ |
 | 3 | 📄 다양한 문서 포맷 | PDF, DOCX, HTML, 코드 파일 지원 | ⭐⭐ |
 | 4 | 🌐 API 서버 구현 | FastAPI 기반 REST API (프론트엔드 연동용) | ⭐⭐ |
-| 5 | 🎯 RAG 품질 개선 | Reranker, Query Rewriting, Hybrid Search 튜닝 | ⭐⭐⭐⭐ |
+| 5 | 🎯 RAG 품질 개선 | Reranker, Query Rewriting, Hybrid Search 구현 완료 (조정 필요) | ⭐⭐⭐⭐ |
 
 ---
 
@@ -106,9 +106,9 @@ flowchart LR
 ### Phase 5: RAG 품질 개선
 **목표**: 검색 정확도 및 답변 품질 향상
 
-- [ ] Cross-Encoder Reranker 도입 (`cross-encoder/ms-marco-MiniLM-L-6-v2`)
-- [ ] Query Rewriting (LLM 사용)
-- [ ] Hybrid Search 가중치 자동 튜닝
+- [x] Cross-Encoder Reranker 도입 (`BAAI/bge-reranker-v2-m3`)
+- [x] Query Rewriting (LLM 사용)
+- [x] Hybrid Search 가중치 자동 튜닝 (RRF 알고리즘 도입)
 - [ ] 청킹 전략 개선 (Semantic Chunking)
 - [ ] Lost in the Middle 완화 (컨텍스트 순서 최적화)
 - [ ] 평가 프레임워크 구축 (`eval/`)
