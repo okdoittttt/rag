@@ -54,6 +54,79 @@ export async function askQuestion(
 }
 
 /**
+ * 스트리밍 질문 답변 API 호출
+ */
+export async function askQuestionStream(
+    query: string,
+    options: AskOptions,
+    onChunk: (text: string) => void,
+    onReferences: (refs: ChunkReference[]) => void,
+    onComplete: () => void,
+    onError: (err: Error) => void
+): Promise<void> {
+    try {
+        const response = await fetch("/api/ask/stream", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                query,
+                top_k: options.topK ?? 5,
+                rerank: options.rerank ?? false,
+                expand: options.expand ?? false,
+                provider: options.provider ?? "gemini",
+            }),
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: "Unknown error" }));
+            throw new Error(error.message || `API error: ${response.status}`);
+        }
+
+        if (!response.body) {
+            throw new Error("Response body is empty");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || ""; // Incomplete line
+
+            for (const line of lines) {
+                if (line.startsWith("data: ")) {
+                    const data = line.slice(6);
+                    if (data === "[DONE]") {
+                        onComplete();
+                        return;
+                    }
+
+                    try {
+                        const parsed = JSON.parse(data);
+                        if (parsed.text) {
+                            onChunk(parsed.text);
+                        } else if (parsed.references) {
+                            onReferences(parsed.references);
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse SSE data:", data, e);
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        onError(err instanceof Error ? err : new Error("Unknown error during streaming"));
+    }
+}
+
+/**
  * 문서 검색 API 호출
  */
 export async function searchDocuments(

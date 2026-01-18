@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ChatList, ChatInput, Message } from "@/components/chat";
 import { ModelSelector } from "@/components/chat/ModelSelector";
-import { askQuestion } from "@/lib/api";
+import { askQuestion, askQuestionStream } from "@/lib/api";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -28,23 +28,46 @@ export default function Home() {
     setIsLoading(true);
 
     try {
-      // Call actual API with selected provider
-      const response = await askQuestion(query, { provider });
-
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === botId
-            ? {
-              ...m,
-              content: response.answer,
-              isLoading: false,
-              references: response.references,
-            }
-            : m
-        )
+      // Call actual API with selected provider (Streaming)
+      await askQuestionStream(
+        query,
+        { provider },
+        (text) => {
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === botId ? { ...m, content: m.content + text } : m
+            )
+          );
+        },
+        (refs) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === botId ? { ...m, references: refs } : m))
+          );
+        },
+        () => {
+          setIsLoading(false);
+          setMessages((prev) =>
+            prev.map((m) => (m.id === botId ? { ...m, isLoading: false } : m))
+          );
+        },
+        (error) => {
+          const errorMessage = error.message || "알 수 없는 오류가 발생했습니다.";
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === botId
+                ? {
+                  ...m,
+                  content: m.content + `\n\n⚠️ 오류: ${errorMessage}`,
+                  isLoading: false,
+                }
+                : m
+            )
+          );
+          setIsLoading(false);
+        }
       );
     } catch (error) {
-      // Handle error
+      // Setup error handling (fallback)
       const errorMessage =
         error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
 
@@ -59,7 +82,6 @@ export default function Home() {
             : m
         )
       );
-    } finally {
       setIsLoading(false);
     }
   };
