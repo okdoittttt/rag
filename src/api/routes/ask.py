@@ -112,7 +112,12 @@ async def ask(request: AskRequest):
     
     # LLM 호출
     prompt = build_prompt(request.query, chunks)
-    llm = get_llm(request.provider)
+    llm = get_llm(
+        provider=request.provider,
+        api_key=request.api_key,
+        model_name=request.model_name,
+        base_url=request.base_url,
+    )
     answer = llm.generate(prompt)
     
     # 참조 정보 구성
@@ -150,7 +155,12 @@ async def ask_stream(request: AskRequest):
     ]
     
     prompt = build_prompt(request.query, chunks)
-    llm = get_llm(request.provider)
+    llm = get_llm(
+        provider=request.provider,
+        api_key=request.api_key,
+        model_name=request.model_name,
+        base_url=request.base_url,
+    )
     
     async def generate():
         # 먼저 참조 정보 전송

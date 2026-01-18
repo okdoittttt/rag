@@ -16,6 +16,11 @@ class AskRequest(BaseModel):
     expand: bool = Field(default=False, description="Query Rewriting으로 검색 확장")
     provider: str | None = Field(default=None, description="LLM Provider (gemini/ollama)")
     user_id: str | None = Field(default=None, description="사용자 ID (격리된 검색용)")
+    
+    # LLM 설정 (클라이언트 오버라이드)
+    api_key: str | None = Field(default=None, description="API Key (Optional)")
+    model_name: str | None = Field(default=None, description="Model Name (Optional)")
+    base_url: str | None = Field(default=None, description="Base URL (Ollama only)")
 
 
 class ChunkReference(BaseModel):

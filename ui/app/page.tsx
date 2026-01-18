@@ -5,9 +5,11 @@ import { useSession } from "next-auth/react";
 import { ChatList, ChatInput, Message } from "@/components/chat";
 import { ModelSelector } from "@/components/chat/ModelSelector";
 import { askQuestionStream } from "@/lib/api";
+import { useSettingsStore } from "@/lib/store";
 
 export default function Home() {
   const { data: session } = useSession();
+  const settings = useSettingsStore();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [provider, setProvider] = useState<"gemini" | "ollama">("gemini");
@@ -33,7 +35,13 @@ export default function Home() {
       // Call actual API with selected provider and user_id (Streaming)
       await askQuestionStream(
         query,
-        { provider, user_id: session?.user?.id },
+        {
+          provider,
+          user_id: session?.user?.id,
+          api_key: provider === "gemini" ? settings.geminiApiKey : undefined,
+          model_name: provider === "gemini" ? settings.geminiModel : settings.ollamaModel,
+          base_url: provider === "ollama" ? settings.ollamaBaseUrl : undefined,
+        },
         (text) => {
           setMessages((prev) =>
             prev.map((m) =>

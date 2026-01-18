@@ -184,16 +184,24 @@ class OllamaLLM(LLM):
             yield f"오류 발생: {str(e)}"
 
 
-def get_llm(provider: str | None = None) -> LLM:
+def get_llm(
+    provider: str | None = None,
+    api_key: str | None = None,
+    model_name: str | None = None,
+    base_url: str | None = None,
+) -> LLM:
     """설정된 Provider에 맞는 LLM 인스턴스 반환
     
     Args:
         provider: 'gemini' 또는 'ollama'. None이면 config 설정을 따름.
+        api_key: Gemini API Key (Optional Override)
+        model_name: Model Name (Optional Override)
+        base_url: Ollama Base URL (Optional Override)
     """
     config = get_config()
     target_provider = provider or config.generation.provider
     
     if target_provider == "ollama":
-        return OllamaLLM()
+        return OllamaLLM(base_url=base_url, model=model_name)
     else:
-        return GeminiLLM()
+        return GeminiLLM(api_key=api_key, model_name=model_name)

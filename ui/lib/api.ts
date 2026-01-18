@@ -8,6 +8,9 @@ export interface AskOptions {
     expand?: boolean;
     provider?: "gemini" | "ollama";
     user_id?: string;  // 사용자 ID (격리된 검색용)
+    api_key?: string;
+    model_name?: string;
+    base_url?: string;
 }
 
 export interface ChunkReference {
@@ -44,6 +47,9 @@ export async function askQuestion(
             expand: options.expand ?? false,
             provider: options.provider ?? "gemini",
             user_id: options.user_id,
+            api_key: options.api_key,
+            model_name: options.model_name,
+            base_url: options.base_url,
         }),
     });
 
@@ -79,6 +85,9 @@ export async function askQuestionStream(
                 expand: options.expand ?? false,
                 provider: options.provider ?? "gemini",
                 user_id: options.user_id,
+                api_key: options.api_key,
+                model_name: options.model_name,
+                base_url: options.base_url,
             }),
         });
 
