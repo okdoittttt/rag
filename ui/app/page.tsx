@@ -1,34 +1,50 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { ChatList, ChatInput, Message } from "@/components/chat";
 import { ModelSelector } from "@/components/chat/ModelSelector";
 import { askQuestionStream } from "@/lib/api";
 import { useSettingsStore } from "@/lib/store";
+import { useChatStore } from "@/lib/chatStore";
 
 export default function Home() {
   const { data: session } = useSession();
   const settings = useSettingsStore();
-  const [messages, setMessages] = useState<Message[]>([]);
+  const chatStore = useChatStore();
+
   const [isLoading, setIsLoading] = useState(false);
   const [provider, setProvider] = useState<"gemini" | "ollama">("gemini");
+  const [mounted, setMounted] = useState(false);
+
+  // Only set mounted state, don't auto-create sessions
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const currentSession = chatStore.getCurrentSession();
+  const messages = mounted && currentSession ? currentSession.messages : [];
 
   const handleSubmit = async (query: string) => {
+    // Create session on first message if none exists
+    let sessionId = chatStore.currentSessionId;
+    if (!sessionId) {
+      sessionId = chatStore.createSession();
+    }
+
     // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
       content: query,
     };
-    setMessages((prev) => [...prev, userMessage]);
+    chatStore.addMessage(sessionId, userMessage);
 
     // Add loading bot message
     const botId = (Date.now() + 1).toString();
-    setMessages((prev) => [
-      ...prev,
-      { id: botId, role: "assistant", content: "", isLoading: true },
-    ]);
+    const botMessage: Message = { id: botId, role: "assistant", content: "", isLoading: true };
+    chatStore.addMessage(sessionId, botMessage);
+
     setIsLoading(true);
 
     try {
@@ -43,36 +59,23 @@ export default function Home() {
           base_url: provider === "ollama" ? settings.ollamaBaseUrl : undefined,
         },
         (text) => {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === botId ? { ...m, content: m.content + text } : m
-            )
-          );
+          chatStore.updateMessage(sessionId, botId, {
+            content: (chatStore.sessions[sessionId]?.messages.find(m => m.id === botId)?.content || "") + text
+          });
         },
         (refs) => {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === botId ? { ...m, references: refs } : m))
-          );
+          chatStore.updateMessage(sessionId, botId, { references: refs });
         },
         () => {
           setIsLoading(false);
-          setMessages((prev) =>
-            prev.map((m) => (m.id === botId ? { ...m, isLoading: false } : m))
-          );
+          chatStore.updateMessage(sessionId, botId, { isLoading: false });
         },
         (error) => {
           const errorMessage = error.message || "알 수 없는 오류가 발생했습니다.";
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === botId
-                ? {
-                  ...m,
-                  content: m.content + `\n\n⚠️ 오류: ${errorMessage}`,
-                  isLoading: false,
-                }
-                : m
-            )
-          );
+          chatStore.updateMessage(sessionId, botId, {
+            content: (chatStore.sessions[sessionId]?.messages.find(m => m.id === botId)?.content || "") + `\n\n⚠️ 오류: ${errorMessage}`,
+            isLoading: false
+          });
           setIsLoading(false);
         }
       );
@@ -81,23 +84,16 @@ export default function Home() {
       const errorMessage =
         error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
 
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === botId
-            ? {
-              ...m,
-              content: `⚠️ 오류: ${errorMessage}`,
-              isLoading: false,
-            }
-            : m
-        )
-      );
+      chatStore.updateMessage(sessionId, botId, {
+        content: `⚠️ 오류: ${errorMessage}`,
+        isLoading: false
+      });
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col flex-1">
+    <div className="flex flex-col h-full overflow-hidden">
       <div className="bg-background/95 backdrop-blur p-2 flex justify-start sticky top-0 z-10">
         <ModelSelector value={provider} onChange={setProvider} disabled={isLoading} />
       </div>

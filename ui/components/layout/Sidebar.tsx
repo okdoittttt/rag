@@ -1,7 +1,7 @@
 "use client";
 
 import { useSession, signOut } from "next-auth/react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     MessageSquarePlus,
     Settings,
@@ -15,22 +15,40 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import SettingsDialog from "@/components/settings/SettingsDialog";
+import { useChatStore } from "@/lib/chatStore";
 
 export default function Sidebar() {
     const { data: session } = useSession();
     const router = useRouter();
+    const chatStore = useChatStore();
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isCollapsed, setIsCollapsed] = useState(false);
+    const [mounted, setMounted] = useState(false);
 
-    // Mock chat history
-    const recentChats: { id: string; title: string }[] = [
-        // { id: "1", title: "RAG 시스템 아키텍처" },
-        // { id: "2", title: "Docker Compose 설정" },
-    ];
+    useEffect(() => {
+        setMounted(true);
+    }, []);
+
+    // Get sorted sessions (newest first)
+    const recentChats = mounted ? Object.values(chatStore.sessions).sort(
+        (a, b) => b.updatedAt - a.updatedAt
+    ) : [];
 
     const handleNewChat = () => {
+        chatStore.createSession();
         router.push("/");
-        router.refresh();
+    };
+
+    const handleSessionClick = (sessionId: string) => {
+        chatStore.setCurrentSession(sessionId);
+        router.push("/");
+    };
+
+    const handleDeleteSession = (e: React.MouseEvent, sessionId: string) => {
+        e.stopPropagation();
+        if (confirm("채팅 기록을 삭제하시겠습니까?")) {
+            chatStore.deleteSession(sessionId);
+        }
     };
 
     if (isCollapsed) {
@@ -134,12 +152,25 @@ export default function Sidebar() {
                         </div>
                     ) : (
                         recentChats.map((chat) => (
-                            <button
+                            <div
                                 key={chat.id}
-                                className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white rounded-lg transition truncate"
+                                onClick={() => handleSessionClick(chat.id)}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition group cursor-pointer ${chatStore.currentSessionId === chat.id
+                                    ? "bg-white/10 text-white"
+                                    : "text-gray-400 hover:bg-white/5 hover:text-gray-300"
+                                    }`}
                             >
-                                {chat.title}
-                            </button>
+                                <div className="flex items-center space-x-2 overflow-hidden">
+                                    <MessageSquarePlus size={16} className="flex-shrink-0" />
+                                    <span className="truncate">{chat.title}</span>
+                                </div>
+                                <button
+                                    onClick={(e) => handleDeleteSession(e, chat.id)}
+                                    className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 transition"
+                                >
+                                    <LogOut size={14} />
+                                </button>
+                            </div>
                         ))
                     )}
                 </div>
