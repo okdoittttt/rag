@@ -26,7 +26,7 @@ export function ChatInput({ onSubmit, isLoading = false }: ChatInputProps) {
     };
 
     return (
-        <div className="border-t p-4 bg-background">
+        <div className="p-4 bg-background">
             <div className="max-w-3xl mx-auto flex gap-2 items-end">
                 <textarea
                     value={input}

@@ -16,14 +16,7 @@ export function ChatList({ messages }: ChatListProps) {
     }, [messages]);
 
     if (messages.length === 0) {
-        return (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground">
-                <div className="text-center space-y-2">
-                    <p className="text-lg">RAG Knowledge Base</p>
-                    <p className="text-sm">문서에 대해 무엇이든 물어보세요.</p>
-                </div>
-            </div>
-        );
+        return <div className="flex-1" />;
     }
 
     return (

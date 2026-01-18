@@ -88,7 +88,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col flex-1">
-      <div className="border-b bg-background/95 backdrop-blur p-2 flex justify-center sticky top-0 z-10">
+      <div className="bg-background/95 backdrop-blur p-2 flex justify-start sticky top-0 z-10">
         <ModelSelector value={provider} onChange={setProvider} disabled={isLoading} />
       </div>
       <ChatList messages={messages} />
