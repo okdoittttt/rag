@@ -3,8 +3,8 @@
 터미널 감성을 담은 **Full-Stack RAG (Retrieval-Augmented Generation)** 웹 애플리케이션입니다.
 Python(FastAPI) 백엔드와 Next.js 프론트엔드로 구성되어 있으며, 로컬 환경에서 안전하고 강력한 문서 검색 및 질문 답변 기능을 제공합니다.
 
-![Terminal RAG UI](./ui/public/og-image.png)
-*(UI 스크린샷이 있다면 여기에 추가)*
+![Terminal RAG UI](./main.png)
+
 
 ## ✨ 주요 기능
 
