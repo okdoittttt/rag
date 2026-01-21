@@ -26,28 +26,20 @@ export async function POST(req: NextRequest) {
         }
 
         // 파일 확장자 검증
-        const allowedExtensions = [".txt", ".md"];
+        const allowedExtensions = [".txt", ".md", ".pdf"];
         const ext = "." + file.name.split(".").pop()?.toLowerCase();
         if (!allowedExtensions.includes(ext)) {
             return NextResponse.json(
-                { error: "지원되지 않는 파일 형식입니다. (.txt, .md만 지원)" },
+                { error: "지원되지 않는 파일 형식입니다. (.txt, .md, .pdf만 지원)" },
                 { status: 400 }
             );
         }
 
-        // 파일 내용 읽기
-        const content = await file.text();
+        // 파일 버퍼 읽기 (텍스트 변환 제거)
         const fileBuffer = Buffer.from(await file.arrayBuffer());
 
-        if (!content.trim()) {
-            return NextResponse.json(
-                { error: "파일 내용이 비어있습니다." },
-                { status: 400 }
-            );
-        }
-
         // 사용자별 업로드 디렉토리 생성
-        const userUploadDir = path.join(UPLOAD_DIR, userId);
+        const userUploadDir = path.resolve(UPLOAD_DIR, userId);
         await mkdir(userUploadDir, { recursive: true });
 
         // 고유 파일명 생성 (타임스탬프 + 원본명)
@@ -56,17 +48,18 @@ export async function POST(req: NextRequest) {
         const storedFilename = `${timestamp}_${safeFilename}`;
         const filepath = path.join(userUploadDir, storedFilename);
 
-        // 파일 저장
+        // 파일 저장 (절대 경로 사용)
         await writeFile(filepath, fileBuffer);
 
         // 백엔드 /index API 호출
+        // content 대신 file_path 전달 (백엔드에서 파싱)
         const response = await fetch(`${API_BASE_URL}/index`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                content: content,
+                file_path: filepath,
                 filename: file.name,
                 user_id: userId,
             }),

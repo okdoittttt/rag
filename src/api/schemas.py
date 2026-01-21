@@ -54,7 +54,8 @@ class SearchResponse(BaseModel):
 
 class IndexRequest(BaseModel):
     """인덱싱 요청"""
-    content: str = Field(..., description="인덱싱할 텍스트")
+    content: str | None = Field(default=None, description="인덱싱할 텍스트 (직접 전달 시)")
+    file_path: str | None = Field(default=None, description="서버 내 파일 경로 (파일 파싱 시)")
     filename: str = Field(default="uploaded", description="파일명 (메타데이터용)")
     user_id: str | None = Field(default=None, description="사용자 ID (격리된 인덱싱용)")
 

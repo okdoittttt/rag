@@ -52,7 +52,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
 
     const processFiles = async (files: FileList | File[]) => {
         const fileArray = Array.from(files);
-        const allowedTypes = [".txt", ".md"];
+        const allowedTypes = [".txt", ".md", ".pdf"];
 
         const validFiles = fileArray.filter((file) => {
             const ext = "." + file.name.split(".").pop()?.toLowerCase();
@@ -60,7 +60,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
         });
 
         if (validFiles.length === 0) {
-            alert("지원되는 파일 형식: .txt, .md");
+            alert("지원되는 파일 형식: .txt, .md, .pdf");
             return;
         }
 
@@ -124,14 +124,14 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-all ${isDragging
-                        ? "border-blue-500 bg-blue-500/10"
-                        : "border-white/20 hover:border-white/40 bg-white/5"
+                    ? "border-blue-500 bg-blue-500/10"
+                    : "border-white/20 hover:border-white/40 bg-white/5"
                     }`}
             >
                 <input
                     type="file"
                     multiple
-                    accept=".txt,.md"
+                    accept=".txt,.md,.pdf"
                     onChange={handleFileSelect}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                 />
@@ -142,7 +142,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
                 <p className="text-white font-medium mb-1">
                     파일을 드래그하거나 클릭하여 업로드
                 </p>
-                <p className="text-gray-500 text-sm">.txt, .md 파일 지원</p>
+                <p className="text-gray-500 text-sm">.txt, .md, .pdf 파일 지원</p>
             </div>
 
             {/* Upload List */}

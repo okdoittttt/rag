@@ -34,7 +34,7 @@ export default function UploadPage() {
 
                     <div className="mt-6 p-4 bg-white/5 rounded-lg border border-white/10">
                         <p className="text-sm text-gray-400">
-                            <strong className="text-gray-300">지원 형식:</strong> .txt, .md
+                            <strong className="text-gray-300">지원 형식:</strong> .txt, .md, .pdf
                         </p>
                         <p className="text-sm text-gray-400 mt-1">
                             <strong className="text-gray-300">격리된 저장:</strong> 업로드한 문서는 본인 계정에서만 검색됩니다.
