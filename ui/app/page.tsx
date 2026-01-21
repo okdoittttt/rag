@@ -94,7 +94,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="bg-background/95 backdrop-blur p-2 flex justify-between items-center sticky top-0 z-10 border-b">
+      <div className="bg-background/95 backdrop-blur p-2 flex justify-between items-center sticky top-0 z-10 border-b border-gray-200 dark:border-zinc-800">
         <ModelSelector value={provider} onChange={setProvider} disabled={isLoading} />
 
         {/* 검색 확장 체크박스 */}
