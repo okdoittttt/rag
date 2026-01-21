@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, Trash2, ArrowLeft, Search, Loader2 } from "lucide-react";
+import { FileText, Trash2, ArrowLeft, Search, Loader2, MessageSquare } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 interface Document {
     id: string;
@@ -30,6 +31,7 @@ function formatDate(dateStr: string): string {
 }
 
 export default function DocumentsPage() {
+    const router = useRouter();
     const [documents, setDocuments] = useState<Document[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState("");
@@ -153,17 +155,26 @@ export default function DocumentsPage() {
                                     </div>
                                 </div>
 
-                                <button
-                                    onClick={() => handleDelete(doc.id)}
-                                    disabled={deletingId === doc.id}
-                                    className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition opacity-0 group-hover:opacity-100 disabled:opacity-50"
-                                >
-                                    {deletingId === doc.id ? (
-                                        <Loader2 size={16} className="animate-spin" />
-                                    ) : (
-                                        <Trash2 size={16} />
-                                    )}
-                                </button>
+                                <div className="flex items-center space-x-2">
+                                    <button
+                                        onClick={() => router.push(`/documents/${doc.id}/chat?filename=${encodeURIComponent(doc.filename)}`)}
+                                        className="p-2 text-gray-500 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg transition opacity-0 group-hover:opacity-100"
+                                        title="이 문서에서 질문하기"
+                                    >
+                                        <MessageSquare size={16} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(doc.id)}
+                                        disabled={deletingId === doc.id}
+                                        className="p-2 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition opacity-0 group-hover:opacity-100 disabled:opacity-50"
+                                    >
+                                        {deletingId === doc.id ? (
+                                            <Loader2 size={16} className="animate-spin" />
+                                        ) : (
+                                            <Trash2 size={16} />
+                                        )}
+                                    </button>
+                                </div>
                             </div>
                         ))}
                     </div>

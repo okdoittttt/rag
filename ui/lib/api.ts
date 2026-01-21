@@ -8,6 +8,7 @@ export interface AskOptions {
     expand?: boolean;
     provider?: "gemini" | "ollama";
     user_id?: string;  // 사용자 ID (격리된 검색용)
+    source_filter?: string;  // 특정 문서로 검색 제한 (파일명)
     api_key?: string;
     model_name?: string;
     base_url?: string;
@@ -47,6 +48,7 @@ export async function askQuestion(
             expand: options.expand ?? false,
             provider: options.provider ?? "gemini",
             user_id: options.user_id,
+            source_filter: options.source_filter,
             api_key: options.api_key,
             model_name: options.model_name,
             base_url: options.base_url,
@@ -85,6 +87,7 @@ export async function askQuestionStream(
                 expand: options.expand ?? false,
                 provider: options.provider ?? "gemini",
                 user_id: options.user_id,
+                source_filter: options.source_filter,
                 api_key: options.api_key,
                 model_name: options.model_name,
                 base_url: options.base_url,

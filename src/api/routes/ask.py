@@ -73,9 +73,9 @@ def _search_documents(request: AskRequest) -> tuple[list, list]:
     else:
         queries = [request.query]
     
-    # 검색 (user_id 필터 적용)
+    # 검색 (user_id 및 source_filter 적용)
     search_top_k = request.top_k * 3 if request.rerank else request.top_k * 2
-    
+
     all_results = []
     for q in queries:
         # 검색 수행
@@ -83,6 +83,7 @@ def _search_documents(request: AskRequest) -> tuple[list, list]:
             query=q,
             top_k=search_top_k,
             user_id=request.user_id,
+            source_filter=request.source_filter,
             fusion_type="weighted",
             alpha=0.7,  # 벡터 검색 가중치 70%
         )
