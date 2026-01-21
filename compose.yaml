@@ -12,7 +12,7 @@ services:
   api:
     build: .
     container_name: rag-api
-    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    entrypoint: [ "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000" ]
     ports:
       - "8000:8000"
     depends_on:
@@ -22,6 +22,12 @@ services:
       - ./.env:/app/.env
     environment:
       - PYTHONPATH=/app/src
+      - QDRANT_HOST=qdrant
+      - QDRANT_PORT=6333
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL}
+      - OLLAMA_MODEL=${OLLAMA_MODEL}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY}
+      - GOOGLE_MODEL=${GOOGLE_MODEL}
     restart: unless-stopped
 
   cli:
@@ -34,7 +40,7 @@ services:
       - ./.env:/app/.env
     environment:
       - PYTHONPATH=/app/src
-    entrypoint: ["python", "-m", "cli.main"]
+    entrypoint: [ "python", "-m", "cli.main" ]
 
 volumes:
   qdrant_data:

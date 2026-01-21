@@ -15,6 +15,13 @@ class AskRequest(BaseModel):
     rerank: bool = Field(default=False, description="Reranker로 결과 재정렬")
     expand: bool = Field(default=False, description="Query Rewriting으로 검색 확장")
     provider: str | None = Field(default=None, description="LLM Provider (gemini/ollama)")
+    user_id: str | None = Field(default=None, description="사용자 ID (격리된 검색용)")
+    source_filter: str | None = Field(default=None, description="특정 문서로 검색 제한 (파일명)")
+
+    # LLM 설정 (클라이언트 오버라이드)
+    api_key: str | None = Field(default=None, description="API Key (Optional)")
+    model_name: str | None = Field(default=None, description="Model Name (Optional)")
+    base_url: str | None = Field(default=None, description="Base URL (Ollama only)")
 
 
 class ChunkReference(BaseModel):
@@ -36,6 +43,7 @@ class SearchRequest(BaseModel):
     """검색 요청"""
     query: str = Field(..., description="검색어")
     top_k: int = Field(default=5, ge=1, le=20, description="반환할 결과 개수")
+    user_id: str | None = Field(default=None, description="사용자 ID (격리된 검색용)")
 
 
 class SearchResponse(BaseModel):
@@ -47,8 +55,10 @@ class SearchResponse(BaseModel):
 
 class IndexRequest(BaseModel):
     """인덱싱 요청"""
-    content: str = Field(..., description="인덱싱할 텍스트")
+    content: str | None = Field(default=None, description="인덱싱할 텍스트 (직접 전달 시)")
+    file_path: str | None = Field(default=None, description="서버 내 파일 경로 (파일 파싱 시)")
     filename: str = Field(default="uploaded", description="파일명 (메타데이터용)")
+    user_id: str | None = Field(default=None, description="사용자 ID (격리된 인덱싱용)")
 
 
 class IndexResponse(BaseModel):

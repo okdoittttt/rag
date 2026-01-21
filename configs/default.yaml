@@ -24,13 +24,12 @@ embedding:
   batch_size: 32
   store_type: qdrant         # qdrant | faiss
   qdrant:
-    host: localhost
-    port: 6333
+    # host, port는 환경변수(QDRANT_HOST) 또는 기본값 사용
     collection: terminal-rag
 
 retrieval:
   top_k: 5
-  score_threshold: 0.7
+  score_threshold: 0.4
   search_type: vector     # vector | hybrid
 
 generation:

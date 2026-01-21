@@ -73,12 +73,20 @@ def _search_documents(request: AskRequest) -> tuple[list, list]:
     else:
         queries = [request.query]
     
-    # 검색
+    # 검색 (user_id 및 source_filter 적용)
     search_top_k = request.top_k * 3 if request.rerank else request.top_k * 2
-    
+
     all_results = []
     for q in queries:
-        results = searcher.search(q, top_k=search_top_k)
+        # 검색 수행
+        results = searcher.search(
+            query=q,
+            top_k=search_top_k,
+            user_id=request.user_id,
+            source_filter=request.source_filter,
+            fusion_type="weighted",
+            alpha=0.7,  # 벡터 검색 가중치 70%
+        )
         all_results.extend(results)
     
     # 중복 제거
@@ -112,14 +120,19 @@ async def ask(request: AskRequest):
     
     # LLM 호출
     prompt = build_prompt(request.query, chunks)
-    llm = get_llm(request.provider)
+    llm = get_llm(
+        provider=request.provider,
+        api_key=request.api_key,
+        model_name=request.model_name,
+        base_url=request.base_url,
+    )
     answer = llm.generate(prompt)
     
     # 참조 정보 구성
     references = [
         ChunkReference(
-            content=chunk.content[:300],
-            source=chunk.metadata.get("filename", "unknown"),
+            content=chunk.content[:500],
+            source=chunk.metadata.get("source", "unknown"),
             score=score,
         )
         for chunk, score in unique_results
@@ -142,15 +155,20 @@ async def ask_stream(request: AskRequest):
     # 참조 정보 (스트림 시작 시 전송)
     references = [
         {
-            "content": chunk.content[:200],
-            "source": chunk.metadata.get("filename", "unknown"),
+            "content": chunk.content[:500],
+            "source": chunk.metadata.get("source", "unknown"),
             "score": score,
         }
         for chunk, score in unique_results
     ]
     
     prompt = build_prompt(request.query, chunks)
-    llm = get_llm(request.provider)
+    llm = get_llm(
+        provider=request.provider,
+        api_key=request.api_key,
+        model_name=request.model_name,
+        base_url=request.base_url,
+    )
     
     async def generate():
         # 먼저 참조 정보 전송

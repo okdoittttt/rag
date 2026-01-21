@@ -41,8 +41,8 @@ class ChunkingConfig(BaseModel):
 
 class QdrantConfig(BaseModel):
     """Qdrant 서버 설정"""
-    host: str = "localhost"
-    port: int = 6333
+    host: str = Field(default_factory=lambda: os.getenv("QDRANT_HOST", "localhost"))
+    port: int = Field(default_factory=lambda: int(os.getenv("QDRANT_PORT", "6333")))
     collection: str = "terminal-rag"
 
 
