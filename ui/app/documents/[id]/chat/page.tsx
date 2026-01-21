@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ArrowLeft, FileText } from "lucide-react";
@@ -9,6 +9,7 @@ import { ChatList, ChatInput, Message } from "@/components/chat";
 import { ModelSelector } from "@/components/chat/ModelSelector";
 import { askQuestionStream } from "@/lib/api";
 import { useSettingsStore } from "@/lib/store";
+import { useChatStore } from "@/lib/chatStore";
 
 export default function DocumentChatPage() {
     const router = useRouter();
@@ -16,23 +17,49 @@ export default function DocumentChatPage() {
     const searchParams = useSearchParams();
     const { data: session } = useSession();
     const settings = useSettingsStore();
+    const chatStore = useChatStore();
 
     const documentId = params.id as string;
     const filename = searchParams.get("filename") || "문서";
 
-    const [messages, setMessages] = useState<Message[]>([]);
+    // Store current session ID ref to prevent stale closures
+    const sessionIdRef = useRef<string | null>(null);
+
     const [isLoading, setIsLoading] = useState(false);
     const [provider, setProvider] = useState<"gemini" | "ollama">("gemini");
     const [expand, setExpand] = useState(false);
+    const [mounted, setMounted] = useState(false);
+
+    useEffect(() => {
+        setMounted(true);
+        // Create a new session specifically for this document if one doesn't exist
+        // or just use a new session. For simplicity, we'll start a new session.
+        // Ideally, we could check if there's an existing session for this document.
+        const newSessionId = chatStore.createSession();
+        chatStore.updateSessionTitle(newSessionId, `${filename} (Document Chat)`);
+        chatStore.setCurrentSession(newSessionId);
+        sessionIdRef.current = newSessionId;
+
+        return () => {
+            // Optional: Cleanup empty sessions?
+        };
+    }, [filename]);
+
+    const messages = mounted && chatStore.currentSessionId && chatStore.sessions[chatStore.currentSessionId]
+        ? chatStore.sessions[chatStore.currentSessionId].messages
+        : [];
 
     const handleSubmit = async (query: string) => {
+        const sessionId = sessionIdRef.current || chatStore.currentSessionId;
+        if (!sessionId) return; // Should not happen
+
         // Add user message
         const userMessage: Message = {
             id: Date.now().toString(),
             role: "user",
             content: query,
         };
-        setMessages((prev) => [...prev, userMessage]);
+        chatStore.addMessage(sessionId, userMessage);
 
         // Add loading bot message
         const botId = (Date.now() + 1).toString();
@@ -42,7 +69,7 @@ export default function DocumentChatPage() {
             content: "",
             isLoading: true
         };
-        setMessages((prev) => [...prev, botMessage]);
+        chatStore.addMessage(sessionId, botMessage);
 
         setIsLoading(true);
 
@@ -59,46 +86,21 @@ export default function DocumentChatPage() {
                     base_url: provider === "ollama" ? settings.ollamaBaseUrl : undefined,
                 },
                 (text) => {
-                    // Append text to bot message
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.id === botId
-                                ? { ...msg, content: msg.content + text }
-                                : msg
-                        )
-                    );
+                    chatStore.appendMessageContent(sessionId, botId, text);
                 },
                 (refs) => {
-                    // Update references
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.id === botId ? { ...msg, references: refs } : msg
-                        )
-                    );
+                    chatStore.updateMessage(sessionId, botId, { references: refs });
                 },
                 () => {
-                    // Complete
                     setIsLoading(false);
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.id === botId ? { ...msg, isLoading: false } : msg
-                        )
-                    );
+                    chatStore.updateMessage(sessionId, botId, { isLoading: false });
                 },
                 (error) => {
-                    // Error
                     const errorMessage = error.message || "알 수 없는 오류가 발생했습니다.";
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.id === botId
-                                ? {
-                                      ...msg,
-                                      content: msg.content + `\n\n⚠️ 오류: ${errorMessage}`,
-                                      isLoading: false,
-                                  }
-                                : msg
-                        )
-                    );
+                    chatStore.updateMessage(sessionId, botId, {
+                        content: (chatStore.sessions[sessionId]?.messages.find(m => m.id === botId)?.content || "") + `\n\n⚠️ 오류: ${errorMessage}`,
+                        isLoading: false
+                    });
                     setIsLoading(false);
                 }
             );
@@ -106,17 +108,10 @@ export default function DocumentChatPage() {
             const errorMessage =
                 error instanceof Error ? error.message : "알 수 없는 오류가 발생했습니다.";
 
-            setMessages((prev) =>
-                prev.map((msg) =>
-                    msg.id === botId
-                        ? {
-                              ...msg,
-                              content: `⚠️ 오류: ${errorMessage}`,
-                              isLoading: false,
-                          }
-                        : msg
-                )
-            );
+            chatStore.updateMessage(sessionId, botId, {
+                content: `⚠️ 오류: ${errorMessage}`,
+                isLoading: false
+            });
             setIsLoading(false);
         }
     };
