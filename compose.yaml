@@ -37,6 +37,9 @@ services:
       - "3000:3000"
     depends_on:
       - api
+    volumes:
+      - ./ui/prisma:/app/prisma
+      - ./ui/.env:/app/.env
     environment:
       - API_URL=http://api:8000
     restart: unless-stopped
