@@ -166,3 +166,25 @@ export async function searchDocuments(
 
     return response.json();
 }
+
+export async function getSystemPrompt(): Promise<string> {
+    const response = await fetch("/api/config/system-prompt");
+    if (!response.ok) {
+        throw new Error("Failed to fetch system prompt");
+    }
+    const data = await response.json();
+    return data.system_prompt;
+}
+
+export async function updateSystemPrompt(prompt: string): Promise<void> {
+    const response = await fetch("/api/config/system-prompt", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ system_prompt: prompt }),
+    });
+    if (!response.ok) {
+        throw new Error("Failed to update system prompt");
+    }
+}

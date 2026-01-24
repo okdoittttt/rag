@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import ask, search, index
+from api.routes import ask, search, index, config
 from api.exceptions import RAGException
 
 
@@ -38,6 +38,7 @@ app.add_middleware(
 app.include_router(ask.router, tags=["QA"])
 app.include_router(search.router, tags=["Search"])
 app.include_router(index.router, tags=["Index"])
+app.include_router(config.router, prefix="/config", tags=["Config"])
 
 
 # === 글로벌 예외 핸들러 ===

@@ -5,7 +5,7 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: "/api/:path((?!auth|upload|documents).*)",
+        source: "/api/:path((?!auth|upload|documents|config).*)",
         destination: `${process.env.API_URL || "http://127.0.0.1:8000"}/:path*`, // Backend API (exclude Next.js API routes)
       },
       {

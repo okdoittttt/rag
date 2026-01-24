@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSettingsStore } from "@/lib/store";
 import { X, Save } from "lucide-react";
 import { useTheme } from "next-themes";
+import { getSystemPrompt, updateSystemPrompt } from "@/lib/api";
 
 interface SettingsDialogProps {
     isOpen: boolean;
@@ -19,6 +20,11 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
     const [geminiModel, setGeminiModel] = useState(settings.geminiModel);
     const [ollamaBaseUrl, setOllamaBaseUrl] = useState(settings.ollamaBaseUrl);
     const [ollamaModel, setOllamaModel] = useState(settings.ollamaModel);
+
+    // New state for System Prompt
+    const [systemPrompt, setSystemPrompt] = useState("");
+    const [isLoadingPrompt, setIsLoadingPrompt] = useState(false);
+
     const [activeTab, setActiveTab] = useState("general"); // Default to general
 
     // Sync state when dialog opens
@@ -28,15 +34,35 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
             setGeminiModel(settings.geminiModel);
             setOllamaBaseUrl(settings.ollamaBaseUrl);
             setOllamaModel(settings.ollamaModel);
+
+            // Load system prompt
+            setIsLoadingPrompt(true);
+            getSystemPrompt()
+                .then(setSystemPrompt)
+                .catch((err) => {
+                    console.error("Failed to load system prompt:", err);
+                    setSystemPrompt("Failed to load prompt. Please try again.");
+                })
+                .finally(() => setIsLoadingPrompt(false));
         }
     }, [isOpen, settings]);
 
-    const handleSave = () => {
-        settings.setGeminiApiKey(geminiApiKey);
-        settings.setGeminiModel(geminiModel);
-        settings.setOllamaBaseUrl(ollamaBaseUrl);
-        settings.setOllamaModel(ollamaModel);
-        onClose();
+    const handleSave = async () => {
+        try {
+            // Save System Prompt first (async)
+            await updateSystemPrompt(systemPrompt);
+
+            // Save other settings (sync/store)
+            settings.setGeminiApiKey(geminiApiKey);
+            settings.setGeminiModel(geminiModel);
+            settings.setOllamaBaseUrl(ollamaBaseUrl);
+            settings.setOllamaModel(ollamaModel);
+
+            onClose();
+        } catch (error) {
+            console.error("Failed to save settings:", error);
+            alert("설정 저장에 실패했습니다. (시스템 프롬프트 업데이트 실패)");
+        }
     };
 
     if (!isOpen) return null;
@@ -92,6 +118,18 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                         >
                             Ollama
                             {activeTab === "ollama" && (
+                                <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500 rounded-t-full" />
+                            )}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab("prompt")}
+                            className={`pb-2 px-1 text-sm font-medium transition relative ${activeTab === "prompt"
+                                ? "text-blue-500 font-bold"
+                                : "text-muted-foreground hover:text-foreground"
+                                }`}
+                        >
+                            프롬프트
+                            {activeTab === "prompt" && (
                                 <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-500 rounded-t-full" />
                             )}
                         </button>
@@ -205,6 +243,33 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                                         className="w-full px-4 py-2.5 bg-muted/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition placeholder-muted-foreground"
                                         placeholder="llama3"
                                     />
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === "prompt" && (
+                            <div className="space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                                <div>
+                                    <label className="block text-sm font-medium text-foreground mb-1">
+                                        System Prompt
+                                    </label>
+                                    <div className="relative">
+                                        <textarea
+                                            value={systemPrompt}
+                                            onChange={(e) => setSystemPrompt(e.target.value)}
+                                            disabled={isLoadingPrompt}
+                                            className="w-full h-96 px-4 py-3 bg-muted/50 border border-border rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition placeholder-muted-foreground resize-none font-mono leading-relaxed"
+                                            placeholder="시스템 프롬프트를 입력하세요..."
+                                        />
+                                        {isLoadingPrompt && (
+                                            <div className="absolute inset-0 flex items-center justify-center bg-black/10 rounded-lg">
+                                                <div className="animate-spin h-5 w-5 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        AI 어시스턴트의 페르소나와 제약조건을 설정합니다. 변경사항은 서버에 텍스트 파일로 저장됩니다.
+                                    </p>
                                 </div>
                             </div>
                         )}

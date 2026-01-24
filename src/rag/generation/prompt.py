@@ -11,7 +11,8 @@ from rag.chunking.chunk import Chunk
 
 
 # 시스템 프롬프트: 페르소나 및 제약조건 정의
-SYSTEM_PROMPT = """당신은 전문적이고 신뢰할 수 있는 AI 어시스턴트입니다.
+# 기본 시스템 프롬프트 (파일이 없을 경우 사용)
+DEFAULT_SYSTEM_PROMPT = """당신은 전문적이고 신뢰할 수 있는 AI 어시스턴트입니다.
 사용자의 질문에 대해 아래 제공된 [Context]를 기반으로 **충실하고 상세하게** 답변하세요.
 
 **핵심 원칙:**
@@ -27,6 +28,24 @@ SYSTEM_PROMPT = """당신은 전문적이고 신뢰할 수 있는 AI 어시스�
 
 **언어:** 한국어로 답변하세요.
 """
+
+def get_system_prompt() -> str:
+    """시스템 프롬프트를 로드합니다.
+    
+    설정 파일(data/system_prompt.txt)이 있으면 해당 내용을,
+    없으면 기본 상수(DEFAULT_SYSTEM_PROMPT)를 반환합니다.
+    """
+    try:
+        from rag.config import get_config
+        # config에서 데이터 경로를 가져올 수도 있지만, 여기서는 data/ 디렉토리로 고정하거나 환경변수 사용
+        # Docker volume mount: ./data:/app/data
+        prompt_path = Path("/app/data/system_prompt.txt")
+        if prompt_path.exists():
+             return prompt_path.read_text(encoding="utf-8")
+    except Exception as e:
+        print(f"Failed to load system prompt file: {e}")
+        
+    return DEFAULT_SYSTEM_PROMPT
 
 def build_prompt(query: str, chunks: List[Chunk]) -> str:
     """컨텍스트와 질문을 결합하여 프롬프트 생성
@@ -47,8 +66,13 @@ def build_prompt(query: str, chunks: List[Chunk]) -> str:
     
     context_str = "\n".join(context_parts)
     
+    context_str = "\n".join(context_parts)
+    
+    # 동적 시스템 프롬프트 로드
+    system_prompt = get_system_prompt()
+    
     # 전체 프롬프트 조립
-    prompt = f"""{SYSTEM_PROMPT}
+    prompt = f"""{system_prompt}
 
 [Context]
 {context_str}
