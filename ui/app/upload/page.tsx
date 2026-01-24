@@ -19,8 +19,8 @@ export default function UploadPage() {
             </div>
 
             {/* Content */}
-            <div className="flex-1 flex flex-col items-center justify-center px-4">
-                <div className="w-full max-w-xl">
+            <div className="flex-1 flex flex-col items-center px-4 overflow-y-auto">
+                <div className="w-full max-w-xl my-auto py-10">
                     <div className="text-center mb-8">
                         <h2 className="text-2xl font-bold text-white mb-2">
                             RAG 문서 업로드

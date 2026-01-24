@@ -8,7 +8,8 @@ export async function POST(req: NextRequest) {
 
         // 백엔드 API (localhost:8000) 호출
         // Next.js 서버는 호스트 머신에서 실행되므로 localhost:8000으로 접근 가능
-        const response = await fetch("http://127.0.0.1:8000/ask/stream", {
+        const API_URL = process.env.API_URL || "http://127.0.0.1:8000";
+        const response = await fetch(`${API_URL}/ask/stream`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
