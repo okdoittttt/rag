@@ -68,7 +68,24 @@ graph TD
 
 ---
 
-## 🚀 시작하기 (Getting Started)
+## ⚡ Quick Start (Docker Compose)
+
+모든 구성 요소(API, UI, Qdrant)를 Docker Compose로 한 번에 실행할 수 있습니다.
+
+```bash
+# 환경 변수 설정 (Google Gemini API Key 등)
+cp .env.example .env
+vi .env
+
+# 서비스 실행
+docker compose up -d --build
+```
+
+실행 후 브라우저에서 `http://localhost:3000`으로 접속하세요.
+
+---
+
+## 🚀 수동 시작하기 (Manual Setup)
 
 ### 0. 사전 준비 (Prerequisites)
 - **Docker**: Qdrant 실행을 위해 필요
