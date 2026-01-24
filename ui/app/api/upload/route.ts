@@ -53,23 +53,39 @@ export async function POST(req: NextRequest) {
 
         // 백엔드 /index API 호출
         // content 대신 file_path 전달 (백엔드에서 파싱)
-        const response = await fetch(`${API_BASE_URL}/index`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                file_path: filepath,
-                filename: file.name,
-                user_id: userId,
-            }),
-        });
+        console.log(`Sending upload request to backend: ${API_BASE_URL}/index`);
 
-        let chunkCount = 0;
-        if (response.ok) {
-            const data = await response.json();
-            chunkCount = data.chunk_count || 0;
+        let response;
+        try {
+            response = await fetch(`${API_BASE_URL}/index`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Connection": "close",
+                },
+                body: JSON.stringify({
+                    file_path: filepath,
+                    filename: file.name,
+                    user_id: userId,
+                }),
+                cache: "no-store",
+            });
+        } catch (fetchError) {
+            console.error(`Fetch failed for ${API_BASE_URL}/index:`, fetchError);
+            throw fetchError;
         }
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Backend returned error ${response.status}:`, errorText);
+            return NextResponse.json(
+                { error: `백엔드 처리 실패: ${response.status} - ${errorText}` },
+                { status: response.status }
+            );
+        }
+
+        const data = await response.json();
+        const chunkCount = data.chunk_count || 0;
 
         // DB에 문서 정보 저장
         const document = await prisma.document.create({

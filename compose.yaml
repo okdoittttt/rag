@@ -40,6 +40,7 @@ services:
     volumes:
       - ./ui/prisma:/app/prisma
       - ./ui/.env:/app/.env
+      - ./data:/app/data
     environment:
       - API_URL=http://api:8000
     restart: unless-stopped
