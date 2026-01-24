@@ -17,6 +17,8 @@ chunking:
   chunk_size: 1000        # 자(characters)
   chunk_overlap: 150      # 10-15%
   preserve_structure: true
+  strategy: text          # text | markdown | semantic
+  semantic_threshold: 0.7 # 의미론적 청킹 유사도 임계값 (0.0-1.0)
 
 embedding:
   model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2

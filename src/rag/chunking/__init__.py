@@ -6,30 +6,42 @@
 from rag.chunking.chunk import Chunk
 from rag.chunking.splitter import split_text
 from rag.chunking.markdown import split_markdown
+from rag.chunking.semantic import split_semantic
 from rag.config import get_config
 from rag.ingestion.document import Document
 
 
 def chunk_document(doc: Document) -> list[Chunk]:
     """문서를 청크로 분할
-    
-    확장자에 따라 적절한 분할 전략을 선택합니다.
+
+    설정과 확장자에 따라 적절한 분할 전략을 선택합니다.
+    - semantic: 의미 기반 분할 (임베딩 + 코사인 유사도)
     - .md: Markdown 구조 보존 분할
     - 기타: 기본 텍스트 분할
-    
+
     Args:
         doc: 분할할 Document
-        
+
     Returns:
         Chunk 리스트
     """
     config = get_config()
     chunk_size = config.chunking.chunk_size
     chunk_overlap = config.chunking.chunk_overlap
+    strategy = config.chunking.strategy
     source = doc.metadata.get("source", "")
     extension = doc.metadata.get("extension", "")
-    
-    if extension == ".md":
+
+    # Strategy selection
+    if strategy == "semantic":
+        return split_semantic(
+            doc.content,
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+            similarity_threshold=config.chunking.semantic_threshold,
+            source=source,
+        )
+    elif extension == ".md":
         return split_markdown(
             doc.content,
             chunk_size=chunk_size,
@@ -78,6 +90,7 @@ __all__ = [
     "Chunk",
     "split_text",
     "split_markdown",
+    "split_semantic",
     "chunk_document",
     "chunk_text",
 ]

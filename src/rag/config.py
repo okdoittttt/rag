@@ -37,6 +37,8 @@ class ChunkingConfig(BaseModel):
     chunk_size: int = Field(default=1000, ge=100, le=10000)
     chunk_overlap: int = Field(default=150, ge=0)
     preserve_structure: bool = True
+    strategy: Literal["text", "markdown", "semantic"] = "text"
+    semantic_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
 
 
 class QdrantConfig(BaseModel):
