@@ -30,17 +30,16 @@ services:
       - GOOGLE_MODEL=${GOOGLE_MODEL}
     restart: unless-stopped
 
-  cli:
-    build: .
-    container_name: rag-cli
+  ui:
+    build: ./ui
+    container_name: rag-ui
+    ports:
+      - "3000:3000"
     depends_on:
-      - qdrant
-    volumes:
-      - ./data:/app/data
-      - ./.env:/app/.env
+      - api
     environment:
-      - PYTHONPATH=/app/src
-    entrypoint: [ "python", "-m", "cli.main" ]
+      - API_URL=http://api:8000
+    restart: unless-stopped
 
 volumes:
   qdrant_data:
