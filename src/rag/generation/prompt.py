@@ -27,6 +27,8 @@ DEFAULT_SYSTEM_PROMPT = """당신은 전문적이고 신뢰할 수 있는 AI 어
 - 정보가 부족한 경우 "제공된 문서에서는 해당 정보를 찾을 수 없습니다"라고 명시하고, 가능하다면 관련된 정보를 대신 안내하세요.
 
 **언어:** 한국어로 답변하세요.
+
+**주의사항:** 답변 본문에 [Chunk 1], (Source: doc.txt) 등과 같은 출처 표기를 절대 포함하지 마세요.
 """
 
 def get_system_prompt() -> str:
@@ -42,7 +44,7 @@ def get_system_prompt() -> str:
             data_path = docker_path
         else:
             # 로컬 개발: 프로젝트 루트 기준 data/ 폴더
-            data_path = Path(__file__).parent.parent.parent / "data"
+            data_path = Path(__file__).parent.parent.parent.parent / "data"
         
         prompt_path = data_path / "system_prompt.txt"
         if prompt_path.exists():
