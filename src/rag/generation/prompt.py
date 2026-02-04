@@ -5,6 +5,7 @@ RAG 답변 생성을 위한 시스템 프롬프트 및 컨텍스트 결합 기�
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List
 
 from rag.chunking.chunk import Chunk
@@ -19,7 +20,6 @@ DEFAULT_SYSTEM_PROMPT = """당신은 전문적이고 신뢰할 수 있는 AI 어
 1. **근거 중심**: [Context]에 있는 정보를 최대한 활용하여 답변하세요. 없는 내용을 지어내지 마세요.
 2. **충분한 설명**: 질문의 복잡도에 맞게 답변하세요. 단순한 질문에는 명확하게, 복잡한 질문에는 체계적이고 상세하게 설명하세요.
 3. **구조화된 답변**: 필요시 목록, 단계별 설명, 소제목 등을 사용하여 읽기 쉽게 구성하세요.
-4. **출처 인용**: 답변에 사용한 정보의 출처(Chunk 번호)를 언급하여 신뢰성을 높이세요.
 
 **답변 스타일:**
 - 전문적이면서도 이해하기 쉬운 설명을 제공하세요.
@@ -36,12 +36,17 @@ def get_system_prompt() -> str:
     없으면 기본 상수(DEFAULT_SYSTEM_PROMPT)를 반환합니다.
     """
     try:
-        from rag.config import get_config
-        # config에서 데이터 경로를 가져올 수도 있지만, 여기서는 data/ 디렉토리로 고정하거나 환경변수 사용
-        # Docker volume mount: ./data:/app/data
-        prompt_path = Path("/app/data/system_prompt.txt")
+        # Docker에서는 /app/data, 로컬에서는 프로젝트 루트의 data/ 사용
+        docker_path = Path("/app/data")
+        if docker_path.exists():
+            data_path = docker_path
+        else:
+            # 로컬 개발: 프로젝트 루트 기준 data/ 폴더
+            data_path = Path(__file__).parent.parent.parent / "data"
+        
+        prompt_path = data_path / "system_prompt.txt"
         if prompt_path.exists():
-             return prompt_path.read_text(encoding="utf-8")
+            return prompt_path.read_text(encoding="utf-8")
     except Exception as e:
         print(f"Failed to load system prompt file: {e}")
         
