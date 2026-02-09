@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING
 
 from rag.embedding.base import VectorStoreBase
 from rag.embedding.embedder import Embedder
-from rag.embedding.faiss_store import FAISSStore
 
 if TYPE_CHECKING:
     from rag.config import Config
@@ -15,16 +14,16 @@ if TYPE_CHECKING:
 
 def get_vector_store(config: "Config") -> VectorStoreBase:
     """설정에 따라 적절한 벡터 저장소 반환
-    
+
     Args:
         config: 전체 설정 객체
-        
+
     Returns:
-        VectorStoreBase 구현체 (FAISSStore 또는 QdrantStore)
+        VectorStoreBase 구현체 (QdrantStore)
     """
     store_type = config.embedding.store_type
     dimension = config.embedding.dimension
-    
+
     if store_type == "qdrant":
         from rag.embedding.qdrant_store import QdrantStore
         qdrant_config = config.embedding.qdrant
@@ -35,17 +34,15 @@ def get_vector_store(config: "Config") -> VectorStoreBase:
             collection_name=qdrant_config.collection,
         )
     else:
-        # 기본값: FAISS
-        return FAISSStore(dimension=dimension)
+        raise ValueError(f"지원하지 않는 store_type: {store_type}. 'qdrant'를 사용하세요.")
 
 
 # 하위 호환성을 위한 별칭
-VectorStore = FAISSStore
+VectorStore = VectorStoreBase
 
 
 __all__ = [
     "Embedder",
-    "FAISSStore",
     "VectorStore",
     "VectorStoreBase",
     "get_vector_store",

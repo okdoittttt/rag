@@ -13,7 +13,7 @@ import numpy as np
 
 from rag.chunking.chunk import Chunk
 from rag.config import get_config
-from rag.embedding import Embedder, VectorStore
+from rag.embedding import Embedder, VectorStoreBase
 from rag.logger import get_logger
 from rag.retrieval.bm25 import BM25Searcher
 
@@ -51,7 +51,7 @@ def rrf_score(rank: int, k: int = 60) -> float:
 class HybridSearcher:
     """하이브리드 검색기"""
     
-    def __init__(self, embedder: Embedder, vector_store: VectorStore):
+    def __init__(self, embedder: Embedder, vector_store: VectorStoreBase):
         self.embedder = embedder
         self.vector_store = vector_store
         self.bm25 = BM25Searcher()
