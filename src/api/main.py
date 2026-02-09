@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from api.routes import ask, search, index, config
 from api.exceptions import RAGException
+from api.dependencies import APIKeyMiddleware
 
 
 app = FastAPI(
@@ -33,6 +34,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# API Key 인증 미들웨어 (CORS 미들웨어 이후에 추가)
+app.add_middleware(APIKeyMiddleware)
 
 # 라우터 등록
 app.include_router(ask.router, tags=["QA"])

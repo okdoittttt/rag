@@ -28,6 +28,7 @@ services:
       - OLLAMA_MODEL=${OLLAMA_MODEL}
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - GOOGLE_MODEL=${GOOGLE_MODEL}
+      - API_KEY=${API_KEY}
     restart: unless-stopped
 
   ui:
@@ -43,6 +44,7 @@ services:
       - ./data:/app/data
     environment:
       - API_URL=http://api:8000
+      - API_KEY=${API_KEY}
     restart: unless-stopped
 
 volumes:
