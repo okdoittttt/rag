@@ -10,7 +10,8 @@ from fastapi import APIRouter, HTTPException
 from api.schemas import IndexRequest, IndexResponse
 from api.routes.ask import get_searcher
 from rag.config import get_config
-from rag.chunking import chunk_text
+from rag.chunking import chunk_document
+from rag.ingestion.document import Document
 from rag.ingestion.loader import load_file
 
 
@@ -37,13 +38,19 @@ async def index_document(request: IndexRequest):
     if not content:
          raise HTTPException(status_code=400, detail="Empty content")
 
-    # 텍스트 청킹
-    chunks = chunk_text(
-        text=content,
-        filename=request.filename,
-        chunk_size=config.chunking.chunk_size,
-        chunk_overlap=config.chunking.chunk_overlap,
+    # 파일명에서 확장자 추출하여 파일 타입별 청킹 전략 적용
+    filename = request.filename or "uploaded.txt"
+    extension = Path(filename).suffix.lower()
+
+    doc = Document(
+        content=content,
+        metadata={
+            "source": filename,
+            "filename": filename,
+            "extension": extension,
+        },
     )
+    chunks = chunk_document(doc)
     
     if not chunks:
         return IndexResponse(message="No chunks created", chunk_count=0)
