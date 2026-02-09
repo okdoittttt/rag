@@ -226,17 +226,27 @@ class HybridSearcher:
                 "bm25_score": current_bm25_score
             })
 
-        # BM25 점수 정규화 (점수가 있는 경우에만)
+        # BM25 점수 정규화 및 가중치 동적 조정
         cand_bm25_scores = np.array([r["bm25_score"] for r in hybrid_results])
-        if np.max(cand_bm25_scores) > 0:
+        bm25_has_signal = np.max(cand_bm25_scores) > 0
+
+        if bm25_has_signal:
             norm_bm25_scores = min_max_normalize(cand_bm25_scores)
+            effective_alpha = alpha
         else:
+            # BM25 매칭이 전혀 없는 경우 (cross-lingual 쿼리 등)
+            # 벡터 검색 점수만으로 순위 결정
             norm_bm25_scores = np.zeros_like(cand_bm25_scores)
+            effective_alpha = 1.0
+            logger.debug(
+                "bm25_no_signal_fallback_to_vector",
+                query_preview=query[:30],
+            )
 
         # 최종 점수 계산 및 정렬
         final_results = []
         for i, res in enumerate(hybrid_results):
-            final_score = (alpha * res["vec_score"]) + ((1 - alpha) * norm_bm25_scores[i])
+            final_score = (effective_alpha * res["vec_score"]) + ((1 - effective_alpha) * norm_bm25_scores[i])
             final_results.append((res["chunk"], final_score))
 
         final_results.sort(key=lambda x: x[1], reverse=True)
