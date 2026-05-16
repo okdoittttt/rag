@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 
+const API_BASE_URL = process.env.API_URL || "http://127.0.0.1:8000";
+
 export async function POST(req: NextRequest) {
     try {
         const session = await auth();
@@ -12,8 +14,7 @@ export async function POST(req: NextRequest) {
         // 세션에서 user_id를 주입하여 클라이언트 조작 방지
         body.user_id = session.user.id;
 
-        const API_URL = process.env.API_URL || "http://127.0.0.1:8000";
-        const response = await fetch(`${API_URL}/ask/stream`, {
+        const response = await fetch(`${API_BASE_URL}/search`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
@@ -23,24 +24,19 @@ export async function POST(req: NextRequest) {
         });
 
         if (!response.ok) {
+            const errorText = await response.text();
             return NextResponse.json(
-                { message: `Backend error: ${response.status}` },
+                { error: `Backend error: ${response.status} - ${errorText}` },
                 { status: response.status }
             );
         }
 
-        // 스트림을 그대로 파이핑
-        return new Response(response.body, {
-            headers: {
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                "Connection": "keep-alive",
-            },
-        });
+        const data = await response.json();
+        return NextResponse.json(data);
     } catch (error) {
-        console.error("Proxy error:", error);
+        console.error("Search proxy error:", error);
         return NextResponse.json(
-            { message: "Internal Proxy Error" },
+            { error: "서버 오류가 발생했습니다." },
             { status: 500 }
         );
     }

@@ -8,8 +8,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api.routes import ask, search, index
+from api.routes import ask, search, index, config
 from api.exceptions import RAGException
+from api.dependencies import APIKeyMiddleware
 
 
 app = FastAPI(
@@ -34,10 +35,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# API Key 인증 미들웨어 (CORS 미들웨어 이후에 추가)
+app.add_middleware(APIKeyMiddleware)
+
 # 라우터 등록
 app.include_router(ask.router, tags=["QA"])
 app.include_router(search.router, tags=["Search"])
 app.include_router(index.router, tags=["Index"])
+app.include_router(config.router, prefix="/config", tags=["Config"])
 
 
 # === 글로벌 예외 핸들러 ===

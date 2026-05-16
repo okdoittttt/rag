@@ -65,3 +65,31 @@ class IndexResponse(BaseModel):
     """인덱싱 응답"""
     message: str = Field(..., description="결과 메시지")
     chunk_count: int = Field(..., description="생성된 청크 수")
+
+
+class IndexDeleteRequest(BaseModel):
+    """``source``(파일명) + ``user_id`` 단위 인덱스 삭제 요청.
+
+    UI에서 문서를 삭제할 때 백엔드 인덱스(Qdrant, BM25 in-memory 등) 청크를
+    함께 정리하기 위해 사용한다. 청크 단위 식별자는 백엔드 내부 ID이므로
+    호출자가 알 필요 없도록 ``filename + user_id`` 조합을 본질 키로 사용한다.
+
+    Attributes:
+        filename: 삭제할 ``source`` 파일명. UI에서 사용자가 업로드한 원본 이름.
+        user_id: 사용자 ID. 익명 흐름에서는 ``None``.
+    """
+
+    filename: str = Field(..., description="삭제할 source 파일명")
+    user_id: str | None = Field(default=None, description="사용자 ID")
+
+
+class IndexDeleteResponse(BaseModel):
+    """인덱스 삭제 응답.
+
+    Attributes:
+        deleted_count: 실제로 삭제된 청크 수. 매칭되는 청크가 없으면 ``0``.
+        message: 사람이 읽을 결과 메시지.
+    """
+
+    deleted_count: int = Field(..., description="삭제된 청크 수")
+    message: str = Field(..., description="결과 메시지")

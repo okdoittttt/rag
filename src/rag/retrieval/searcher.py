@@ -13,7 +13,7 @@ import numpy as np
 
 from rag.chunking.chunk import Chunk
 from rag.config import get_config
-from rag.embedding import Embedder, VectorStore
+from rag.embedding import Embedder, VectorStoreBase
 from rag.logger import get_logger
 from rag.retrieval.bm25 import BM25Searcher
 
@@ -51,7 +51,7 @@ def rrf_score(rank: int, k: int = 60) -> float:
 class HybridSearcher:
     """하이브리드 검색기"""
     
-    def __init__(self, embedder: Embedder, vector_store: VectorStore):
+    def __init__(self, embedder: Embedder, vector_store: VectorStoreBase):
         self.embedder = embedder
         self.vector_store = vector_store
         self.bm25 = BM25Searcher()
@@ -116,8 +116,8 @@ class HybridSearcher:
 
         두 검색 결과의 순위만 사용하여 점수 스케일에 무관한 통합을 수행합니다.
         """
-        # 1. BM25 검색 (순위용) - BM25는 user_id 필터 미지원 (추후 확장 가능)
-        bm25_results = self.bm25.search(query, top_k=top_k * 2)
+        # 1. BM25 검색 (순위용) - user_id 필터 적용
+        bm25_results = self.bm25.search(query, top_k=top_k * 2, user_id=user_id)
 
         # 2. 벡터 검색 (순위용) - user_id 필터 적용
         query_vec = self.embedder.embed_query(query)
@@ -127,32 +127,36 @@ class HybridSearcher:
             return []
 
         # 3. RRF 점수 계산
-        # chunk_id -> (chunk, rrf_score) 매핑
-        rrf_scores: dict[int, tuple[Chunk, float]] = {}
+        # dedupe key: (source, chunk_index) — 멀티 문서 환경에서 chunk_index만으로는 충돌
+        rrf_scores: dict[Any, tuple[Chunk, float]] = {}
+
+        def _dedupe_key(chunk: Chunk) -> Any:
+            return (
+                chunk.metadata.get("source"),
+                chunk.metadata.get("chunk_index", id(chunk)),
+            )
 
         # BM25 결과에 RRF 점수 부여
         for rank, (chunk, _) in enumerate(bm25_results, start=1):
-            # source_filter 적용
             if source_filter and chunk.metadata.get("source") != source_filter:
                 continue
-            chunk_id = chunk.metadata.get("chunk_index", id(chunk))
+            key = _dedupe_key(chunk)
             score = rrf_score(rank, rrf_k)
-            if chunk_id in rrf_scores:
-                rrf_scores[chunk_id] = (chunk, rrf_scores[chunk_id][1] + score)
+            if key in rrf_scores:
+                rrf_scores[key] = (chunk, rrf_scores[key][1] + score)
             else:
-                rrf_scores[chunk_id] = (chunk, score)
+                rrf_scores[key] = (chunk, score)
 
         # 벡터 결과에 RRF 점수 부여
         for rank, (chunk, _) in enumerate(vec_results, start=1):
-            # source_filter 적용
             if source_filter and chunk.metadata.get("source") != source_filter:
                 continue
-            chunk_id = chunk.metadata.get("chunk_index", id(chunk))
+            key = _dedupe_key(chunk)
             score = rrf_score(rank, rrf_k)
-            if chunk_id in rrf_scores:
-                rrf_scores[chunk_id] = (chunk, rrf_scores[chunk_id][1] + score)
+            if key in rrf_scores:
+                rrf_scores[key] = (chunk, rrf_scores[key][1] + score)
             else:
-                rrf_scores[chunk_id] = (chunk, score)
+                rrf_scores[key] = (chunk, score)
 
         # 4. 점수순 정렬
         final_results = list(rrf_scores.values())
@@ -193,7 +197,7 @@ class HybridSearcher:
         if not candidates:
             # 벡터 결과도 없으면 BM25 검색 시도 (BM25 인덱스가 있을 경우)
             if len(bm25_scores) > 0:
-                return self.bm25.search(query, top_k)
+                return self.bm25.search(query, top_k, user_id=user_id)
             return []
 
         # source_filter 적용 (벡터 검색 결과 필터링)
@@ -210,15 +214,24 @@ class HybridSearcher:
         vec_scores = np.array([score for _, score in candidates])
         # 코사인 유사도(-1~1)는 그대로 사용 (상대적 순위보다 절대적 유사도가 중요)
         norm_vec_scores = vec_scores
-        # norm_vec_scores = min_max_normalize(vec_scores)
+
+        # BM25 corpus 위치 lookup: (source, chunk_index) -> bm25_scores 인덱스
+        # chunk_index만으로는 멀티 문서에서 충돌하므로 source와 함께 사용
+        bm25_lookup: dict[Any, int] = {}
+        if len(bm25_scores) > 0:
+            for i, bm25_chunk in enumerate(self.bm25.chunks):
+                key = (
+                    bm25_chunk.metadata.get("source"),
+                    bm25_chunk.metadata.get("chunk_index"),
+                )
+                bm25_lookup[key] = i
 
         for i, (chunk, _) in enumerate(candidates):
-            chunk_idx = chunk.metadata.get("chunk_index")
             current_bm25_score = 0.0
-
-            # BM25 인덱스가 있고 해당 청크가 범위 내에 있을 때만 점수 매핑
-            if len(bm25_scores) > 0 and chunk_idx is not None and chunk_idx < len(bm25_scores):
-                current_bm25_score = bm25_scores[chunk_idx]
+            key = (chunk.metadata.get("source"), chunk.metadata.get("chunk_index"))
+            bm25_idx = bm25_lookup.get(key)
+            if bm25_idx is not None and bm25_idx < len(bm25_scores):
+                current_bm25_score = bm25_scores[bm25_idx]
 
             hybrid_results.append({
                 "chunk": chunk,
@@ -226,17 +239,27 @@ class HybridSearcher:
                 "bm25_score": current_bm25_score
             })
 
-        # BM25 점수 정규화 (점수가 있는 경우에만)
+        # BM25 점수 정규화 및 가중치 동적 조정
         cand_bm25_scores = np.array([r["bm25_score"] for r in hybrid_results])
-        if np.max(cand_bm25_scores) > 0:
+        bm25_has_signal = np.max(cand_bm25_scores) > 0
+
+        if bm25_has_signal:
             norm_bm25_scores = min_max_normalize(cand_bm25_scores)
+            effective_alpha = alpha
         else:
+            # BM25 매칭이 전혀 없는 경우 (cross-lingual 쿼리 등)
+            # 벡터 검색 점수만으로 순위 결정
             norm_bm25_scores = np.zeros_like(cand_bm25_scores)
+            effective_alpha = 1.0
+            logger.debug(
+                "bm25_no_signal_fallback_to_vector",
+                query_preview=query[:30],
+            )
 
         # 최종 점수 계산 및 정렬
         final_results = []
         for i, res in enumerate(hybrid_results):
-            final_score = (alpha * res["vec_score"]) + ((1 - alpha) * norm_bm25_scores[i])
+            final_score = (effective_alpha * res["vec_score"]) + ((1 - effective_alpha) * norm_bm25_scores[i])
             final_results.append((res["chunk"], final_score))
 
         final_results.sort(key=lambda x: x[1], reverse=True)
@@ -249,11 +272,29 @@ class HybridSearcher:
 
         return filtered_results[:top_k]
     
+    def delete_by_source(self, source: str, user_id: str | None = None) -> int:
+        """source(+user_id) 매칭 청크를 BM25/벡터 저장소 모두에서 삭제
+
+        Returns:
+            벡터 저장소에서 삭제된 청크 수 (BM25와 동일해야 정상)
+        """
+        vec_deleted = self.vector_store.delete_by_source(source, user_id=user_id)
+        bm25_deleted = self.bm25.delete_by_source(source, user_id=user_id)
+        if vec_deleted != bm25_deleted:
+            logger.warning(
+                "delete_count_mismatch",
+                vector_deleted=vec_deleted,
+                bm25_deleted=bm25_deleted,
+                source=source,
+                user_id=user_id,
+            )
+        return vec_deleted
+
     def save(self, path: Path) -> None:
         """인덱스 저장"""
         self.vector_store.save(path)
         self.bm25.save(path)
-        
+
     def load(self, path: Path) -> None:
         """인덱스 로드"""
         self.vector_store.load(path)

@@ -36,20 +36,33 @@ class TestConfig:
         assert config.logging is not None
     
     def test_chunking_defaults(self) -> None:
-        """청킹 기본값 확인"""
+        """청킹 기본값 확인 (yaml 진실 소스)"""
         config = load_config()
-        
-        assert config.chunking.chunk_size == 1000
-        assert config.chunking.chunk_overlap == 150
+
+        assert config.chunking.chunk_size == 1500
+        assert config.chunking.chunk_overlap == 200
         assert config.chunking.preserve_structure is True
     
     def test_retrieval_defaults(self) -> None:
-        """검색 기본값 확인"""
+        """검색 기본값 확인 (yaml 진실 소스)"""
         config = load_config()
-        
+
         assert config.retrieval.top_k == 5
-        assert config.retrieval.score_threshold == 0.7
+        assert config.retrieval.score_threshold == 0.4
         assert config.retrieval.search_type == "vector"
+
+    def test_pydantic_defaults_match_yaml(self) -> None:
+        """yaml 미로딩 경로(Config())의 Pydantic 기본값이 default.yaml과 일치해야 함
+
+        yaml이 없는 테스트/스크립트 환경에서 갑자기 다른 동작이 발생하지 않도록 보장.
+        """
+        config = Config()
+
+        assert config.embedding.store_type == "qdrant"
+        assert config.embedding.batch_size == 32
+        assert config.embedding.model == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        assert config.retrieval.score_threshold == 0.4
+        assert ".pdf" in config.ingestion.supported_extensions
     
     def test_env_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """환경변수 오버라이드 확인"""

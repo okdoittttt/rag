@@ -9,6 +9,7 @@ from typer.testing import CliRunner
 
 from cli.main import app
 from rag.chunking.chunk import Chunk
+from rag.ingestion.document import Document
 
 
 runner = CliRunner()
@@ -20,22 +21,28 @@ class TestCLI:
     @pytest.fixture
     def mock_components(self):
         """Mock out core RAG components"""
-        # Patching paths based on cli.commands imports
-        with patch("cli.commands.index.load_documents") as mock_load, \
+        # 실제 CLI 모듈은 VectorStore 클래스 대신 get_vector_store 팩토리를 사용하고,
+        # 인덱스 명령은 load_documents가 아닌 load_file을 직접 호출한다.
+        # 따라서 patch 대상도 동일하게 맞춰야 한다.
+        with patch("cli.commands.index.load_file") as mock_load, \
              patch("cli.commands.index.chunk_document") as mock_chunk, \
              patch("cli.commands.index.Embedder") as mock_embedder, \
-             patch("cli.commands.index.VectorStore") as mock_store, \
+             patch("cli.commands.index.get_vector_store") as mock_store, \
              patch("cli.commands.index.HybridSearcher") as mock_indexer, \
              patch("cli.commands.ask.Embedder") as mock_ask_embedder, \
-             patch("cli.commands.ask.VectorStore") as mock_ask_store, \
+             patch("cli.commands.ask.get_vector_store") as mock_ask_store, \
              patch("cli.commands.ask.HybridSearcher") as mock_searcher, \
-             patch("cli.commands.ask.GeminiLLM") as mock_llm, \
+             patch("cli.commands.ask.get_llm") as mock_llm, \
              patch("cli.commands.search.Embedder") as mock_search_embedder, \
-             patch("cli.commands.search.VectorStore") as mock_search_store, \
+             patch("cli.commands.search.get_vector_store") as mock_search_store, \
              patch("cli.commands.search.HybridSearcher") as mock_debug_searcher:
             
             # Setup mocks
-            mock_load.return_value = ["mock_doc"]
+            # load_file은 Document를 반환하도록 한다(A안 인터페이스).
+            mock_load.return_value = Document(
+                content="mock content",
+                metadata={"filename": "test.txt", "extension": ".txt"},
+            )
             mock_chunk.return_value = [Chunk(content="mock content")]
             
             # Indexer mock
@@ -77,8 +84,11 @@ class TestCLI:
             config_mock = MagicMock()
             config_mock.project.index_path = str(tmp_path / "rag_index")
             config_mock.embedding.dimension = 384
+            # MagicMock 기본값이 ".txt" in mock → False를 반환하기 때문에
+            # 지원 확장자를 명시적으로 지정해야 파일이 수집된다.
+            config_mock.ingestion.supported_extensions = [".txt", ".md", ".pdf"]
             mock_config.return_value = config_mock
-            
+
             # 실행
             result = runner.invoke(app, ["index", str(doc_path)])
             
@@ -99,8 +109,11 @@ class TestCLI:
             config_mock = MagicMock()
             config_mock.project.index_path = str(tmp_path / "index")
             config_mock.embedding.dimension = 384
+            # use_reranker가 MagicMock(truthy)이면 실제 Reranker 모델 로드를 시도하므로
+            # 명시적으로 False로 두어 reranker 분기를 우회한다.
+            config_mock.retrieval.use_reranker = False
             mock_config.return_value = config_mock
-            
+
             (tmp_path / "index").mkdir()  # 인덱스 디렉토리 생성
             
             result = runner.invoke(app, ["ask", "test question"])

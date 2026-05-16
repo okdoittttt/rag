@@ -50,3 +50,6 @@ prisma/_legacy_*/
 next-env.d.ts
 
 /lib/generated/prisma
+ui/prisma/dev.db
+prisma/dev.db
+dev.db

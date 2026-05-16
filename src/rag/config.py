@@ -28,7 +28,7 @@ class ProjectConfig(BaseModel):
 
 class IngestionConfig(BaseModel):
     """문서 수집 설정"""
-    supported_extensions: list[str] = Field(default=[".txt", ".md"])
+    supported_extensions: list[str] = Field(default=[".txt", ".md", ".pdf"])
     encoding: str = "utf-8"
 
 
@@ -50,18 +50,17 @@ class QdrantConfig(BaseModel):
 
 class EmbeddingConfig(BaseModel):
     """임베딩 설정"""
-    # model: str = "text-embedding-3-small"
-    model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
     dimension: int = 384
-    batch_size: int = Field(default=100, ge=1)
-    store_type: Literal["faiss", "qdrant"] = "faiss"
+    batch_size: int = Field(default=32, ge=1)
+    store_type: Literal["faiss", "qdrant"] = "qdrant"
     qdrant: QdrantConfig = Field(default_factory=QdrantConfig)
 
 
 class RetrievalConfig(BaseModel):
     """검색 설정"""
     top_k: int = Field(default=5, ge=1, le=100)
-    score_threshold: float = Field(default=0.7, ge=0.0, le=1.0)
+    score_threshold: float = Field(default=0.4, ge=0.0, le=1.0)
     search_type: Literal["vector", "hybrid"] = "vector"
     # Hybrid Search 융합 설정
     fusion_type: Literal["rrf", "weighted"] = "rrf"

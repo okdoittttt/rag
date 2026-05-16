@@ -137,7 +137,10 @@ class QdrantStore(VectorStoreBase):
         )
     
     def search(
-        self, query_embedding: np.ndarray, top_k: int = 5, user_id: str | None = None
+        self,
+        query_embedding: np.ndarray,
+        top_k: int = 5,
+        user_id: str | None = None,
     ) -> list[tuple[Chunk, float]]:
         """유사한 청크 검색
         
@@ -191,6 +194,68 @@ class QdrantStore(VectorStoreBase):
         
         return output
     
+    def delete_by_source(self, source: str, user_id: str | None = None) -> int:
+        """source(+user_id) 매칭 청크 삭제
+
+        Args:
+            source: chunk.metadata["source"]
+            user_id: 사용자 ID. None이면 user_id가 비어있는("") 청크만 삭제.
+
+        Returns:
+            삭제된 청크 수
+        """
+        must: list[Any] = [
+            models.FieldCondition(
+                key="source",
+                match=models.MatchValue(value=source),
+            )
+        ]
+        if user_id is not None:
+            must.append(
+                models.FieldCondition(
+                    key="user_id",
+                    match=models.MatchValue(value=user_id),
+                )
+            )
+        else:
+            must.append(
+                models.FieldCondition(
+                    key="user_id",
+                    match=models.MatchValue(value=""),
+                )
+            )
+
+        delete_filter = models.Filter(must=must)
+
+        # 삭제 전 카운트 (선택적 — 비용 작음)
+        try:
+            count_result = self.client.count(
+                collection_name=self.collection_name,
+                count_filter=delete_filter,
+                exact=True,
+            )
+            deleted = count_result.count
+        except Exception:
+            deleted = 0
+
+        if deleted == 0:
+            return 0
+
+        self.client.delete(
+            collection_name=self.collection_name,
+            points_selector=models.FilterSelector(filter=delete_filter),
+            wait=True,
+        )
+
+        logger.info(
+            "chunks_deleted_from_qdrant",
+            source=source,
+            user_id=user_id,
+            count=deleted,
+            collection=self.collection_name,
+        )
+        return deleted
+
     def save(self, path: str | Path) -> None:
         """Qdrant는 자동 영속화되므로 별도 저장 불필요"""
         logger.info("qdrant_auto_persisted", collection=self.collection_name)
