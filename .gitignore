@@ -25,3 +25,12 @@ data/
 logs/
 docs/
 .pytest_cache/
+
+# Database files (스키마/마이그레이션은 추적, 실제 DB 데이터는 제외)
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+claude
+.claude/
