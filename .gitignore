@@ -31,3 +31,6 @@ docs/
 *.sqlite
 *.sqlite3
 *.db-journal
+
+claude
+.claude/
