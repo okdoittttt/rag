@@ -72,6 +72,11 @@ class GeminiLLM(LLM):
             
             if not response.text:
                 logger.warning("gemini_empty_response", feedback=response.prompt_feedback)
+                # prompt_feedback이 존재하면 안전 정책 차단으로 간주
+                if response.prompt_feedback:
+                    return (
+                        "죄송합니다. 안전 정책에 의해 답변을 생성할 수 없습니다."
+                    )
                 return "죄송합니다. 답변을 생성할 수 없습니다."
                 
             return response.text
