@@ -29,6 +29,9 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY}
       - GOOGLE_MODEL=${GOOGLE_MODEL}
       - API_KEY=${API_KEY}
+      # production 배포 시 주석 해제. API_KEY 미설정 상태로 기동되면
+      # APIKeyMiddleware가 RuntimeError로 fail-fast 한다.
+      # - APP_ENV=production
     restart: unless-stopped
 
   ui:
@@ -46,6 +49,9 @@ services:
       - API_URL=http://api:8000
       - API_KEY=${API_KEY}
       - AUTH_TRUST_HOST=true
+      # NextAuth 콜백/리다이렉트 URL 검증용 절대 URL.
+      # 운영 도메인 사용 시 호스트 .env 의 AUTH_URL 로 재정의한다.
+      - AUTH_URL=${AUTH_URL:-http://localhost:3000}
     restart: unless-stopped
 
 volumes:

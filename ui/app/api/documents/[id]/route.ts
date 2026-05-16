@@ -3,6 +3,9 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { unlink } from "fs/promises";
 
+const API_BASE_URL =
+    process.env.API_URL || process.env.API_BASE_URL || "http://127.0.0.1:8000";
+
 export async function DELETE(
     req: NextRequest,
     { params }: { params: Promise<{ id: string }> }
@@ -35,13 +38,35 @@ export async function DELETE(
             console.warn("File not found or already deleted:", document.filepath);
         }
 
+        // 백엔드 인덱스(Qdrant + BM25) 청크 삭제
+        // DB는 source-of-truth 이므로, 백엔드 호출 실패 시에도 DB 삭제는 진행한다.
+        try {
+            const resp = await fetch(`${API_BASE_URL}/index/by-source`, {
+                method: "DELETE",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-API-Key": process.env.API_KEY || "",
+                },
+                body: JSON.stringify({
+                    filename: document.filename,
+                    user_id: session.user.id,
+                }),
+                cache: "no-store",
+            });
+            if (!resp.ok) {
+                const text = await resp.text();
+                console.warn(
+                    `백엔드 청크 삭제 실패 (status=${resp.status}): ${text}`
+                );
+            }
+        } catch (e) {
+            console.warn("백엔드 청크 삭제 호출 실패:", e);
+        }
+
         // DB에서 삭제
         await prisma.document.delete({
             where: { id: id },
         });
-
-        // TODO: Qdrant에서 해당 문서의 청크도 삭제 (user_id + filename 필터)
-        // 현재는 청크는 Qdrant에 남아있음 (추후 구현 필요)
 
         return NextResponse.json({ message: "문서가 삭제되었습니다." });
     } catch (error) {
