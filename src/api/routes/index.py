@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException
 
 from api.schemas import IndexRequest, IndexResponse
-from api.routes.ask import get_searcher
+from api.routes.ask import get_searcher, get_searcher_lock
 from rag.config import get_config
 from rag.chunking import chunk_document
 from rag.ingestion.document import Document
@@ -59,17 +59,24 @@ async def index_document(request: IndexRequest):
     if request.user_id:
         for chunk in chunks:
             chunk.metadata["user_id"] = request.user_id
-    
-    # 인덱스에 추가
+
     searcher = get_searcher()
-    searcher.index(chunks)
-    
-    # 인덱스 저장
     index_path = Path(config.project.index_path)
     index_path.mkdir(parents=True, exist_ok=True)
-    searcher.save(index_path)
-    
+
+    # 동시 인덱싱/검색으로부터 BM25/FAISS in-memory 상태 보호
+    with get_searcher_lock():
+        # 동일 (source, user_id) 기존 청크 제거 후 재인덱싱 (중복 누적 방지)
+        replaced = searcher.delete_by_source(filename, user_id=request.user_id)
+        searcher.index(chunks)
+        searcher.save(index_path)
+
+    user_label = request.user_id or "anonymous"
+    base_msg = f"Successfully indexed {len(chunks)} chunks for user {user_label}"
+    if replaced:
+        base_msg += f" (replaced {replaced} previous chunks)"
+
     return IndexResponse(
-        message=f"Successfully indexed {len(chunks)} chunks for user {request.user_id or 'anonymous'}",
+        message=base_msg,
         chunk_count=len(chunks),
     )

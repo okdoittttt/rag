@@ -4,6 +4,7 @@
 """
 
 import json
+import threading
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -25,21 +26,30 @@ router = APIRouter()
 # 싱글톤 인스턴스들 (지연 로딩)
 _searcher: HybridSearcher | None = None
 _reranker: Reranker | None = None
+# BM25/FAISS in-memory 상태 보호용. Qdrant도 같은 락을 통과시켜 일관 보장.
+_searcher_lock = threading.RLock()
 
 
 def get_searcher() -> HybridSearcher:
     """HybridSearcher 싱글톤"""
     global _searcher
     if _searcher is None:
-        config = get_config()
-        embedder = Embedder()
-        store = get_vector_store(config)
-        _searcher = HybridSearcher(embedder, store)
-        
-        index_path = Path(config.project.index_path)
-        if index_path.exists():
-            _searcher.load(index_path)
+        with _searcher_lock:
+            if _searcher is None:
+                config = get_config()
+                embedder = Embedder()
+                store = get_vector_store(config)
+                _searcher = HybridSearcher(embedder, store)
+
+                index_path = Path(config.project.index_path)
+                if index_path.exists():
+                    _searcher.load(index_path)
     return _searcher
+
+
+def get_searcher_lock() -> threading.RLock:
+    """다른 라우터(예: /index)가 mutate 시 공유 락을 잡도록"""
+    return _searcher_lock
 
 
 def get_reranker_instance() -> Reranker:
