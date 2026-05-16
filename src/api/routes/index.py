@@ -27,7 +27,7 @@ async def index_document(request: IndexRequest):
     content = ""
     if request.file_path:
         try:
-            content = load_file(request.file_path)
+            content = load_file(request.file_path).content
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
     elif request.content:
