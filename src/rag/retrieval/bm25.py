@@ -44,28 +44,39 @@ class BM25Searcher:
         self.chunks: List[Chunk] = []
 
     def index(self, chunks: List[Chunk]) -> None:
-        """청크 인덱싱
+        """청크 추가 (누적)
+
+        vector_store.add()와 동일하게 기존 청크에 누적된다.
+        rank_bm25는 증분 업데이트를 지원하지 않으므로 전체 코퍼스를 재구축한다.
 
         Args:
             chunks: 인덱싱할 청크 리스트
         """
-        self.chunks = chunks
+        if not chunks:
+            return
 
-        # 코퍼스 토크나이징
+        self.chunks = list(self.chunks) + list(chunks)
+
         tokenized_corpus = [
             tokenize_content(chunk.content)
-            for chunk in chunks
+            for chunk in self.chunks
         ]
 
         self.bm25 = BM25Okapi(tokenized_corpus)
-        logger.info("bm25_indexed", count=len(chunks))
+        logger.info("bm25_indexed", added=len(chunks), total=len(self.chunks))
 
-    def search(self, query: str, top_k: int = 5) -> List[Tuple[Chunk, float]]:
+    def search(
+        self,
+        query: str,
+        top_k: int = 5,
+        user_id: str | None = None,
+    ) -> List[Tuple[Chunk, float]]:
         """키워드 검색
 
         Args:
             query: 검색 쿼리
             top_k: 반환할 개수
+            user_id: 사용자 ID 필터. None이면 필터 없음.
 
         Returns:
             (청크, 점수) 튜플 리스트. 점수는 정규화되지 않음.
@@ -76,14 +87,20 @@ class BM25Searcher:
         tokenized_query = tokenize_query(query)
         scores = self.bm25.get_scores(tokenized_query)
 
-        # 점수 내림차순 정렬
-        top_n_indices = np.argsort(scores)[::-1][:top_k]
+        # 점수 내림차순 정렬 (user_id 필터를 위해 전체 정렬 후 필터링)
+        sorted_indices = np.argsort(scores)[::-1]
 
-        results = []
-        for idx in top_n_indices:
+        results: List[Tuple[Chunk, float]] = []
+        for idx in sorted_indices:
             score = scores[idx]
-            if score > 0:  # 관련성 있는 것만
-                results.append((self.chunks[idx], float(score)))
+            if score <= 0:
+                break
+            chunk = self.chunks[idx]
+            if user_id is not None and chunk.metadata.get("user_id") != user_id:
+                continue
+            results.append((chunk, float(score)))
+            if len(results) >= top_k:
+                break
 
         return results
 
@@ -94,6 +111,48 @@ class BM25Searcher:
 
         tokenized_query = tokenize_query(query)
         return np.array(self.bm25.get_scores(tokenized_query))
+
+    def delete_by_source(self, source: str, user_id: str | None = None) -> int:
+        """source(+user_id) 매칭 청크 삭제 후 BM25 재인덱싱
+
+        Args:
+            source: chunk.metadata["source"]
+            user_id: 사용자 ID. None이면 user_id 없는 청크만 삭제.
+
+        Returns:
+            삭제된 청크 수
+        """
+        if not self.chunks:
+            return 0
+
+        def _matches(chunk: Chunk) -> bool:
+            if chunk.metadata.get("source") != source:
+                return False
+            chunk_user = chunk.metadata.get("user_id")
+            if user_id is None:
+                return chunk_user in (None, "")
+            return chunk_user == user_id
+
+        remaining = [c for c in self.chunks if not _matches(c)]
+        deleted = len(self.chunks) - len(remaining)
+
+        if deleted == 0:
+            return 0
+
+        self.chunks = remaining
+        if remaining:
+            self._rebuild_bm25()
+        else:
+            self.bm25 = None
+
+        logger.info(
+            "bm25_chunks_deleted",
+            source=source,
+            user_id=user_id,
+            count=deleted,
+            remaining=len(remaining),
+        )
+        return deleted
 
     def save(self, path: Path) -> None:
         """인덱스 저장 (JSON 포맷)"""
