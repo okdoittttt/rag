@@ -1,0 +1,26 @@
+# 골든셋 시드 파일. 한 줄 = 한 케이스(JSON). 빈 줄과 '#'으로 시작하는 주석은 무시된다.
+# 카테고리:
+#   single_fact   - 단일 사실 질의 (top-k 검색 적합)
+#   summarization - 문서 요약 (문서 모드 분기 필요, 01 → 02 의존)
+#   comparison    - 비교 질의 (여러 청크 필수)
+#   multi_hop     - 다중 홉 (현재 한계 → 측정만)
+#   no_answer     - 컨텍스트에 없는 질문 (refusal 평가)
+# 필드:
+#   id                 - 케이스 식별자 (자유 문자열)
+#   category           - 위 카테고리 중 하나
+#   question           - 질의 문자열
+#   ground_truth       - 모범 답안 (RAGAS context_recall/correctness용)
+#   expected_sources   - 정답에 필요한 source 파일명 리스트
+#   expected_chunk_ids - 정답에 필요한 chunk_index 리스트 (선택, 강한 근거)
+#   source_filter      - 특정 문서로 검색 제한 (문서 모드 시나리오)
+#   user_id            - 격리된 인덱스 사용 시
+#   tags               - 자유 태그 리스트
+#
+# 본 파일은 시드 예시이며, 운영용 골든셋은 도메인 전문가 검토를 거쳐
+# 카테고리당 10~20건, 총 50~100건으로 확장한다. 케이스 추가/수정 후
+# `uv run python -m evals.ragas_runner` 로 회귀를 측정한다.
+{"id": "q001", "category": "single_fact", "question": "RAG 시스템에서 BM25는 어떤 종류의 검색을 수행하나요?", "ground_truth": "BM25는 키워드 빈도 기반 sparse 검색을 수행한다.", "expected_sources": [], "expected_chunk_ids": [], "tags": ["seed", "retrieval"]}
+{"id": "q002", "category": "summarization", "question": "해당 문서를 요약해서 알려줘.", "ground_truth": "(문서별 요약 — 운영 골든셋에서 source_filter와 함께 채운다)", "expected_sources": [], "expected_chunk_ids": [], "tags": ["seed", "doc-mode"]}
+{"id": "q003", "category": "comparison", "question": "Sparse 검색과 dense 검색의 차이를 비교해줘.", "ground_truth": "Sparse 검색은 단어 빈도 기반, dense 검색은 벡터 유사도 기반이며 의미적 매칭에 강하다.", "expected_sources": [], "expected_chunk_ids": [], "tags": ["seed"]}
+{"id": "q004", "category": "multi_hop", "question": "현재 시스템에서 reranker를 활성화하면 어떤 모델이 사용되며, 그 모델의 기본 batch size 설정은 어떻게 되나요?", "ground_truth": "BAAI/bge-reranker-v2-m3가 사용되며 배치 설정은 reranker 구현부에 정의되어 있다.", "expected_sources": [], "expected_chunk_ids": [], "tags": ["seed", "multi-hop"]}
+{"id": "q005", "category": "no_answer", "question": "이 문서에 포함되지 않은 외부 회사의 2099년 매출은 얼마인가요?", "ground_truth": "제공된 문서에 해당 정보가 없으므로 답변할 수 없다.", "expected_sources": [], "expected_chunk_ids": [], "tags": ["seed", "refusal"]}
