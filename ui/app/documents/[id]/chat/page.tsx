@@ -81,6 +81,7 @@ export default function DocumentChatPage() {
                     expand,
                     user_id: session?.user?.id,
                     source_filter: filename,  // 특정 문서로 제한
+                    doc_mode: true,  // 문서 모드 — 요약 의도 시 전체 청크 투입
                     api_key: provider === "gemini" ? settings.geminiApiKey : undefined,
                     model_name: provider === "gemini" ? settings.geminiModel : settings.ollamaModel,
                     base_url: provider === "ollama" ? settings.ollamaBaseUrl : undefined,
