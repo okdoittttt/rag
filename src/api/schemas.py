@@ -17,6 +17,20 @@ class AskRequest(BaseModel):
     provider: str | None = Field(default=None, description="LLM Provider (gemini/ollama)")
     user_id: str | None = Field(default=None, description="사용자 ID (격리된 검색용)")
     source_filter: str | None = Field(default=None, description="특정 문서로 검색 제한 (파일명)")
+    doc_mode: bool = Field(
+        default=False,
+        description=(
+            "문서 모드. ``source_filter`` 와 함께 사용되며, 요약 의도가 감지/지정되면 "
+            "top-k 검색 대신 해당 문서의 전체 청크를 LLM에 투입한다."
+        ),
+    )
+    summarize_override: bool | None = Field(
+        default=None,
+        description=(
+            "요약 모드 강제 토글. ``None`` 이면 휴리스틱 감지에 위임, "
+            "``True`` 면 강제 활성, ``False`` 면 강제 비활성."
+        ),
+    )
 
     # LLM 설정 (클라이언트 오버라이드)
     api_key: str | None = Field(default=None, description="API Key (Optional)")

@@ -68,6 +68,9 @@ class RetrievalConfig(BaseModel):
     # Reranker 설정
     use_reranker: bool = False
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    # 문서 요약 모드(doc_mode + summarize) 시 LLM 에 투입할 청크 상한.
+    # 컨텍스트 윈도우를 고려한 안전 상한이며, 필요 시 yaml/env 로 조정 가능.
+    summary_max_chunks: int = Field(default=50, ge=1, le=500)
 
 
 
