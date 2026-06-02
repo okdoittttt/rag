@@ -7,6 +7,7 @@ import pytest
 
 from rag.chunking.chunk import Chunk
 from rag.generation import GeminiLLM, build_prompt
+from rag.generation.prompt import SUMMARY_MODE_INSTRUCTION
 
 
 class TestPrompt:
@@ -31,6 +32,20 @@ class TestPrompt:
         assert "[Question]" in prompt
         assert query in prompt
         assert "[Answer]" in prompt
+
+    def test_build_prompt_summary_mode_prepends_instruction(self):
+        """``mode='summary'`` 일 때 요약 전용 지침이 prepend 되어야 한다."""
+        chunks = [
+            Chunk(content="A", metadata={"filename": "d.md", "chunk_index": 0}),
+        ]
+        default_prompt = build_prompt("요약해줘", chunks, mode="default")
+        summary_prompt = build_prompt("요약해줘", chunks, mode="summary")
+
+        assert SUMMARY_MODE_INSTRUCTION.strip().split("\n", 1)[0] not in default_prompt
+        assert SUMMARY_MODE_INSTRUCTION.strip().split("\n", 1)[0] in summary_prompt
+        # 컨텍스트와 질문 구조는 동일하게 유지되어야 한다.
+        assert "[Context]" in summary_prompt
+        assert "[Question]" in summary_prompt
 
 
 class TestGeminiLLM:

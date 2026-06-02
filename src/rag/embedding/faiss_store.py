@@ -173,6 +173,43 @@ class FAISSStore(VectorStoreBase):
         )
         return deleted
 
+    def get_all_by_source(
+        self,
+        source: str,
+        user_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[Chunk]:
+        """source(+user_id) 매칭 청크를 chunk_index 오름차순으로 반환.
+
+        FAISS 는 메타데이터 기반 필터를 자체 제공하지 않으므로 ``self.chunks``
+        선형 스캔으로 수집한다. 단일 문서 청크 수 가정(수백~수천)에서는
+        충분히 빠르다.
+
+        Args:
+            source: chunk.metadata["source"].
+            user_id: 사용자 ID. ``None`` 이면 ``user_id`` 가 ``None`` 또는 빈
+                문자열인 청크만 반환한다(``delete_by_source`` 와 동일 정책).
+            limit: 반환할 최대 청크 수.
+
+        Returns:
+            ``chunk_index`` 오름차순으로 정렬된 ``Chunk`` 리스트.
+        """
+        matched: list[Chunk] = []
+        for chunk in self.chunks:
+            if chunk.metadata.get("source") != source:
+                continue
+            chunk_user = chunk.metadata.get("user_id")
+            if user_id is None:
+                if chunk_user not in (None, ""):
+                    continue
+            else:
+                if chunk_user != user_id:
+                    continue
+            matched.append(chunk)
+
+        matched.sort(key=lambda c: c.metadata.get("chunk_index", 0))
+        return matched[:limit]
+
     def save(self, path: str | Path) -> None:
         """인덱스와 메타데이터 저장
 

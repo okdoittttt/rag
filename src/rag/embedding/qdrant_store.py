@@ -256,6 +256,93 @@ class QdrantStore(VectorStoreBase):
         )
         return deleted
 
+    def get_all_by_source(
+        self,
+        source: str,
+        user_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[Chunk]:
+        """특정 source(파일명) 에 속한 모든 청크를 chunk_index 오름차순으로 반환.
+
+        Qdrant 의 ``scroll`` API 로 필터 조건에 일치하는 포인트를 페이지네이션
+        없이 가져온 뒤 메모리에서 정렬한다. 단일 문서 청크 수가 수백~수천
+        규모를 가정하며, 그 이상에서는 호출부가 ``limit`` 으로 직접 상한을
+        둔다.
+
+        Args:
+            source: chunk.metadata["source"].
+            user_id: 사용자 ID. ``None`` 이면 ``user_id`` 가 빈 문자열인
+                청크만 반환한다(``delete_by_source`` 와 동일 정책).
+            limit: 반환할 최대 청크 수.
+
+        Returns:
+            ``chunk_index`` 오름차순으로 정렬된 ``Chunk`` 리스트.
+        """
+        must: list[Any] = [
+            models.FieldCondition(
+                key="source",
+                match=models.MatchValue(value=source),
+            )
+        ]
+        if user_id is not None:
+            must.append(
+                models.FieldCondition(
+                    key="user_id",
+                    match=models.MatchValue(value=user_id),
+                )
+            )
+        else:
+            must.append(
+                models.FieldCondition(
+                    key="user_id",
+                    match=models.MatchValue(value=""),
+                )
+            )
+
+        scroll_filter = models.Filter(must=must)
+
+        # scroll: limit 보다 큰 컬렉션도 페이지네이션으로 모두 수집.
+        chunks: list[Chunk] = []
+        next_offset: Any = None
+        while True:
+            points, next_offset = self.client.scroll(
+                collection_name=self.collection_name,
+                scroll_filter=scroll_filter,
+                limit=min(256, max(1, limit - len(chunks))),
+                offset=next_offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            for point in points:
+                payload = point.payload or {}
+                metadata = payload.get("metadata", {}) or {
+                    "source": payload.get("source", ""),
+                    "chunk_index": payload.get("chunk_index", 0),
+                    "start_char": payload.get("start_char", 0),
+                    "end_char": payload.get("end_char", 0),
+                    "header_path": payload.get("header_path", ""),
+                }
+                chunks.append(
+                    Chunk(
+                        content=payload.get("content", ""),
+                        metadata=metadata,
+                    )
+                )
+                if len(chunks) >= limit:
+                    break
+            if next_offset is None or len(chunks) >= limit:
+                break
+
+        chunks.sort(key=lambda c: c.metadata.get("chunk_index", 0))
+        logger.debug(
+            "qdrant_get_all_by_source",
+            source=source,
+            user_id=user_id,
+            returned=len(chunks),
+            limit=limit,
+        )
+        return chunks[:limit]
+
     def save(self, path: str | Path) -> None:
         """Qdrant는 자동 영속화되므로 별도 저장 불필요"""
         logger.info("qdrant_auto_persisted", collection=self.collection_name)

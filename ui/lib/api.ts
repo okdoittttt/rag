@@ -9,6 +9,8 @@ export interface AskOptions {
     provider?: "gemini" | "ollama";
     user_id?: string;  // 사용자 ID (격리된 검색용)
     source_filter?: string;  // 특정 문서로 검색 제한 (파일명)
+    doc_mode?: boolean;  // 문서 모드 (요약 의도 시 전체 청크 투입)
+    summarize_override?: boolean | null;  // 요약 모드 강제 토글 (null=휴리스틱 위임)
     api_key?: string;
     model_name?: string;
     base_url?: string;
@@ -44,11 +46,13 @@ export async function askQuestion(
         body: JSON.stringify({
             query,
             top_k: options.topK ?? 5,
-            rerank: options.rerank ?? false,
+            rerank: options.rerank ?? true,
             expand: options.expand ?? false,
             provider: options.provider ?? "gemini",
             user_id: options.user_id,
             source_filter: options.source_filter,
+            doc_mode: options.doc_mode ?? false,
+            summarize_override: options.summarize_override ?? null,
             api_key: options.api_key,
             model_name: options.model_name,
             base_url: options.base_url,
@@ -83,11 +87,13 @@ export async function askQuestionStream(
             body: JSON.stringify({
                 query,
                 top_k: options.topK ?? 5,
-                rerank: options.rerank ?? false,
+                rerank: options.rerank ?? true,
                 expand: options.expand ?? false,
                 provider: options.provider ?? "gemini",
                 user_id: options.user_id,
                 source_filter: options.source_filter,
+                doc_mode: options.doc_mode ?? false,
+                summarize_override: options.summarize_override ?? null,
                 api_key: options.api_key,
                 model_name: options.model_name,
                 base_url: options.base_url,

@@ -92,6 +92,29 @@ class InMemoryVectorStore(VectorStoreBase):
             self.embeddings = None
         return deleted
 
+    def get_all_by_source(
+        self,
+        source: str,
+        user_id: str | None = None,
+        limit: int = 1000,
+    ) -> list[Chunk]:
+        # 실제 store(faiss/qdrant) 와 동일 정책: user_id=None 이면 user_id 가
+        # None/"" 인 청크만 반환하고, chunk_index 오름차순으로 정렬한다.
+        matched: list[Chunk] = []
+        for chunk in self.chunks:
+            if chunk.metadata.get("source") != source:
+                continue
+            chunk_user = chunk.metadata.get("user_id")
+            if user_id is None:
+                if chunk_user not in (None, ""):
+                    continue
+            elif chunk_user != user_id:
+                continue
+            matched.append(chunk)
+
+        matched.sort(key=lambda c: c.metadata.get("chunk_index", 0))
+        return matched[:limit]
+
     def save(self, path: str | Path) -> None:
         pass
 

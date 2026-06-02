@@ -25,6 +25,13 @@ dependencies = [
     "uvicorn[standard]>=0.34.0",
 ]
 
+[project.optional-dependencies]
+eval = [
+    "ragas>=0.2.0",
+    "datasets>=2.14.0",
+    "pandas>=2.0.0",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 

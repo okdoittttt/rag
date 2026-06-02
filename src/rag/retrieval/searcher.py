@@ -272,6 +272,40 @@ class HybridSearcher:
 
         return filtered_results[:top_k]
     
+    def fetch_full_document(
+        self,
+        source: str,
+        user_id: str | None = None,
+        max_chunks: int = 50,
+    ) -> List[Chunk]:
+        """주어진 ``source`` 의 모든 청크를 ``chunk_index`` 오름차순으로 반환한다.
+
+        검색이 아닌 "조회"이므로 BM25/벡터 점수 계산을 건너뛴다. 요약·전체
+        조망 질의에서 컨텍스트 누락(top_k 절단으로 헤더/날짜만 답변되는 현상)
+        을 방지하기 위해 사용된다.
+
+        Args:
+            source: 대상 ``source`` 파일명.
+            user_id: 사용자 ID 필터.
+            max_chunks: LLM 컨텍스트 윈도우 보호용 상한.
+
+        Returns:
+            청크 리스트(``chunk_index`` 오름차순, 최대 ``max_chunks`` 개).
+        """
+        chunks = self.vector_store.get_all_by_source(
+            source=source,
+            user_id=user_id,
+            limit=max_chunks,
+        )
+        logger.debug(
+            "fetch_full_document",
+            source=source,
+            user_id=user_id,
+            returned=len(chunks),
+            max_chunks=max_chunks,
+        )
+        return chunks
+
     def delete_by_source(self, source: str, user_id: str | None = None) -> int:
         """source(+user_id) 매칭 청크를 BM25/벡터 저장소 모두에서 삭제
 

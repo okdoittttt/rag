@@ -28,25 +28,30 @@ class Reranker:
         self,
         model_name: str = "BAAI/bge-reranker-v2-m3",
         device: Optional[str] = None,
+        batch_size: int = 32,
     ):
-        """Reranker 초기화
-        
+        """Reranker 초기화.
+
         Args:
-            model_name: Cross-Encoder 모델 이름
-            device: 실행 디바이스 (None이면 자동 선택)
+            model_name: Cross-Encoder 모델 이름.
+            device: 실행 디바이스. ``None`` 이면 ``sentence-transformers`` 의
+                자동 선택(가능하면 CUDA, 아니면 CPU)에 위임한다.
+            batch_size: ``predict`` 호출 시 사용할 배치 크기. GPU/CPU 리소스에
+                맞춰 조정 가능.
         """
         self.model_name = model_name
-        
-        logger.info("loading_reranker", model=model_name)
-        
+        self.batch_size = batch_size
+
+        logger.info("loading_reranker", model=model_name, device=device)
+
         self.model = CrossEncoder(
             model_name,
             max_length=512,
             device=device,
         )
-        
+
         logger.info("reranker_loaded", model=model_name)
-    
+
     def rerank(
         self,
         query: str,
@@ -54,23 +59,23 @@ class Reranker:
         top_k: int = 5,
     ) -> list[tuple[Chunk, float]]:
         """검색 결과 재정렬
-        
+
         Args:
             query: 사용자 질문
             chunks: (Chunk, score) 튜플 리스트 (1차 검색 결과)
             top_k: 반환할 상위 결과 수
-            
+
         Returns:
             재정렬된 (Chunk, rerank_score) 리스트
         """
         if not chunks:
             return []
-        
+
         # 질문-문서 쌍 생성
         pairs = [(query, chunk.content) for chunk, _ in chunks]
-        
+
         # Cross-Encoder 점수 계산
-        scores = self.model.predict(pairs)
+        scores = self.model.predict(pairs, batch_size=self.batch_size)
         
         # 청크와 새 점수 매핑
         reranked = [

@@ -33,6 +33,13 @@ retrieval:
   top_k: 5
   score_threshold: 0.4
   search_type: vector     # vector | hybrid
+  # 문서 요약 모드(doc_mode + 요약 의도) 시 LLM 에 투입할 청크 상한.
+  summary_max_chunks: 50
+  # Cross-encoder reranker 기본 ON. CPU 환경에서 latency 부담이 크면 false 로 변경.
+  use_reranker: true
+  reranker_model: BAAI/bge-reranker-v2-m3
+  # reranker_device: cuda    # GPU 환경에서 명시하면 추론이 5배 이상 빨라짐.
+  # reranker_batch_size: 32
 
 generation:
   model: gemini-2.5-flash

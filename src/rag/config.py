@@ -65,9 +65,19 @@ class RetrievalConfig(BaseModel):
     # Hybrid Search 융합 설정
     fusion_type: Literal["rrf", "weighted"] = "rrf"
     rrf_k: int = Field(default=20, ge=1, le=100)
-    # Reranker 설정
-    use_reranker: bool = False
+    # Reranker 설정. 기본 ON. CPU 환경에서 latency 부담이 있으면 환경변수
+    # ``RAG_RETRIEVAL_USE_RERANKER=false`` 또는 ``configs/default.yaml`` 에서
+    # ``use_reranker: false`` 로 비활성화한다.
+    use_reranker: bool = True
     reranker_model: str = "BAAI/bge-reranker-v2-m3"
+    # CrossEncoder 실행 디바이스. ``None`` 이면 sentence-transformers 의 자동
+    # 선택(가능하면 CUDA, 아니면 CPU)에 위임한다. ``"cuda"``/``"cpu"``/``"mps"`` 등.
+    reranker_device: str | None = None
+    # CrossEncoder 추론 배치 크기. GPU 메모리에 따라 조정.
+    reranker_batch_size: int = Field(default=32, ge=1, le=256)
+    # 문서 요약 모드(doc_mode + summarize) 시 LLM 에 투입할 청크 상한.
+    # 컨텍스트 윈도우를 고려한 안전 상한이며, 필요 시 yaml/env 로 조정 가능.
+    summary_max_chunks: int = Field(default=50, ge=1, le=500)
 
 
 

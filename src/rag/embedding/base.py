@@ -60,6 +60,31 @@ class VectorStoreBase(ABC):
             삭제된 청크 수
         """
         ...
+
+    @abstractmethod
+    def get_all_by_source(
+        self,
+        source: str,
+        user_id: str | None = None,
+        limit: int = 1000,
+    ) -> list["Chunk"]:
+        """특정 ``source``(파일명)에 속한 모든 청크를 ``chunk_index`` 오름차순으로 반환한다.
+
+        검색이 아닌 "조회"이므로 점수 계산을 수행하지 않는다. 요약 모드에서
+        문서 전체 컨텍스트를 LLM 에 공급하기 위한 진입점이다.
+
+        Args:
+            source: 필터링할 ``source`` 메타데이터 값.
+            user_id: 사용자 ID 필터. ``None`` 이면 ``user_id`` 가 비어있는("")
+                청크만 반환하여 다른 사용자의 문서가 섞이지 않도록 한다.
+            limit: 반환할 최대 청크 수. 초과 시 ``chunk_index`` 오름차순으로
+                상한까지 자른다(LLM 컨텍스트 윈도우 보호용).
+
+        Returns:
+            ``chunk_index`` 오름차순으로 정렬된 ``Chunk`` 리스트. 일치 청크가
+            없으면 빈 리스트.
+        """
+        ...
     
     @abstractmethod
     def save(self, path: str | Path) -> None:
