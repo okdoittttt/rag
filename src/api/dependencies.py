@@ -9,7 +9,8 @@ from __future__ import annotations
 import hmac
 import os
 
-from fastapi import HTTPException, Request
+from fastapi import Request
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -78,10 +79,14 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
             call_next: 다음 미들웨어/엔드포인트 핸들러.
 
         Returns:
-            인증 통과 시 다음 핸들러의 응답.
+            인증 통과 시 다음 핸들러의 응답. ``X-API-Key`` 가 없거나 일치하지
+            않으면 401 ``JSONResponse``.
 
-        Raises:
-            HTTPException: ``X-API-Key`` 가 없거나 일치하지 않을 때 401.
+        Note:
+            ``BaseHTTPMiddleware`` 는 라우팅 바깥에 위치하므로 여기서
+            ``HTTPException`` 을 ``raise`` 해도 FastAPI 의 예외 핸들러가 401 로
+            변환하지 못한다(상위 ``ServerErrorMiddleware`` 까지 전파됨). 따라서
+            ``JSONResponse`` 를 직접 반환해 401 을 보장한다.
         """
         if not self._api_key:
             return await call_next(request)
@@ -96,9 +101,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if not request_api_key or not hmac.compare_digest(
             request_api_key, self._api_key
         ):
-            raise HTTPException(
+            return JSONResponse(
                 status_code=401,
-                detail="유효하지 않은 API Key입니다.",
+                content={"detail": "유효하지 않은 API Key입니다."},
             )
 
         return await call_next(request)
