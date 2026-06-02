@@ -31,6 +31,8 @@ router = APIRouter()
 # 싱글톤 인스턴스들 (지연 로딩)
 _searcher: HybridSearcher | None = None
 _reranker: Reranker | None = None
+# reranker 로드를 한 번 실패하면 재시도하지 않도록 음성 캐시한다.
+_reranker_load_failed: bool = False
 # BM25/FAISS in-memory 상태 보호용. Qdrant도 같은 락을 통과시켜 일관 보장.
 _searcher_lock = threading.RLock()
 
@@ -57,12 +59,41 @@ def get_searcher_lock() -> threading.RLock:
     return _searcher_lock
 
 
-def get_reranker_instance() -> Reranker:
-    """Reranker 싱글톤"""
-    global _reranker
-    if _reranker is None:
+def get_reranker_instance() -> Reranker | None:
+    """Reranker 싱글톤.
+
+    모델 로드 실패 시 ``None`` 을 반환해 호출부가 reranker 없이 진행할 수 있게
+    한다. 실패한 로드를 재시도하지 않도록 ``_reranker_load_failed`` 플래그로
+    음성 캐시한다.
+
+    Returns:
+        성공 시 ``Reranker`` 인스턴스. 실패 시 ``None``.
+    """
+    global _reranker, _reranker_load_failed
+    if _reranker is not None:
+        return _reranker
+    if _reranker_load_failed:
+        return None
+    with _searcher_lock:
+        if _reranker is not None:
+            return _reranker
+        if _reranker_load_failed:
+            return None
         config = get_config()
-        _reranker = Reranker(model_name=config.retrieval.reranker_model)
+        try:
+            _reranker = Reranker(
+                model_name=config.retrieval.reranker_model,
+                device=config.retrieval.reranker_device,
+                batch_size=config.retrieval.reranker_batch_size,
+            )
+        except Exception as exc:  # 모델 다운로드/디바이스 이슈 등
+            logger.error(
+                "reranker_load_failed",
+                model=config.retrieval.reranker_model,
+                error=str(exc),
+            )
+            _reranker_load_failed = True
+            return None
     return _reranker
 
 
@@ -131,8 +162,14 @@ def _search_documents(request: AskRequest) -> tuple[list, list]:
     else:
         queries = [request.query]
 
-    # 검색 (user_id 및 source_filter 적용)
-    search_top_k = request.top_k * 3 if request.rerank else request.top_k * 2
+    # 검색 (user_id 및 source_filter 적용).
+    # Reranker 사용 시 1차 후보를 넓게 가져와야 의미가 있다. 표준은 top_k*5~10
+    # 수준이며, 너무 적으면 cross-encoder가 보정할 여지가 사라진다. 최소 20개
+    # 후보를 보장해 top_k 가 1~2 인 짧은 질의에서도 reranking 이 동작하도록 한다.
+    if request.rerank:
+        search_top_k = max(request.top_k * 5, 20)
+    else:
+        search_top_k = request.top_k * 2
 
     all_results = []
     for q in queries:
@@ -162,10 +199,19 @@ def _search_documents(request: AskRequest) -> tuple[list, list]:
 
     unique_results.sort(key=lambda x: x[1], reverse=True)
 
-    # Reranking (선택적)
+    # Reranking (선택적). 모델 로드 실패 시 `None` 폴백으로 reranker 없이 진행.
     if request.rerank and unique_results:
         reranker = get_reranker_instance()
-        unique_results = reranker.rerank(request.query, unique_results, top_k=request.top_k)
+        if reranker is not None:
+            unique_results = reranker.rerank(
+                request.query, unique_results, top_k=request.top_k,
+            )
+        else:
+            logger.warning(
+                "reranker_unavailable_fallback",
+                query_preview=request.query[:50],
+                candidate_count=len(unique_results),
+            )
 
     chunks = [r[0] for r in unique_results[:request.top_k]]
 

@@ -46,7 +46,7 @@ export async function askQuestion(
         body: JSON.stringify({
             query,
             top_k: options.topK ?? 5,
-            rerank: options.rerank ?? false,
+            rerank: options.rerank ?? true,
             expand: options.expand ?? false,
             provider: options.provider ?? "gemini",
             user_id: options.user_id,
@@ -87,7 +87,7 @@ export async function askQuestionStream(
             body: JSON.stringify({
                 query,
                 top_k: options.topK ?? 5,
-                rerank: options.rerank ?? false,
+                rerank: options.rerank ?? true,
                 expand: options.expand ?? false,
                 provider: options.provider ?? "gemini",
                 user_id: options.user_id,

@@ -12,7 +12,13 @@ class AskRequest(BaseModel):
     """질문-답변 요청"""
     query: str = Field(..., description="질문 내용")
     top_k: int = Field(default=5, ge=1, le=20, description="참조할 청크 개수")
-    rerank: bool = Field(default=False, description="Reranker로 결과 재정렬")
+    rerank: bool = Field(
+        default=True,
+        description=(
+            "Cross-encoder Reranker 로 결과 재정렬. 기본 ON. 모델 로드 실패나 "
+            "CPU 부담을 피하려면 ``false`` 로 명시 전달."
+        ),
+    )
     expand: bool = Field(default=False, description="Query Rewriting으로 검색 확장")
     provider: str | None = Field(default=None, description="LLM Provider (gemini/ollama)")
     user_id: str | None = Field(default=None, description="사용자 ID (격리된 검색용)")
