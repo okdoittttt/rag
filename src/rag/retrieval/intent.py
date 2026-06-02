@@ -36,8 +36,8 @@ SUMMARIZATION_PATTERNS: tuple[str, ...] = (
     r"한\s*(?:줄|문장|단락)\s*(?:로|으로)?\s*(?:요약|정리)",
     # "개요", "개관"
     r"\b(?:개요|개관)\b",
-    # 영어 변형
-    r"^\s*(?:summarize|summary|tl;?dr|overview|outline)\b",
+    # 영어 변형. 문장 어느 위치에서도 매칭(예: "Give me an overview").
+    r"\b(?:summarize|summary|tl;?dr|overview|outline)\b",
 )
 
 # 컴파일 캐시 — 모듈 로드 시 한 번만 컴파일.
