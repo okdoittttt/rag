@@ -154,10 +154,13 @@ class TestRegularSearchPath:
             search_chunks=[(_chunk(3, "doc.md"), 0.8)],
             full_doc_chunks=[],
         )
+        # rerank=False — 본 테스트는 검색 경로 분기와 점수 보존만 검증한다.
+        # rerank 기본 ON 이면 reranker 모델이 점수를 덮어써 의도가 흐려진다.
         req = AskRequest(
             query="BM25 점수는 어떻게 계산되나요?",
             source_filter="doc.md",
             doc_mode=True,
+            rerank=False,
         )
 
         chunks, scored = ask_module._search_documents(req)
@@ -178,6 +181,7 @@ class TestRegularSearchPath:
             query="이 문서를 요약해줘",
             source_filter="doc.md",
             doc_mode=False,
+            rerank=False,
         )
 
         ask_module._search_documents(req)
@@ -196,6 +200,7 @@ class TestRegularSearchPath:
             query="이 문서를 요약해줘",
             source_filter=None,
             doc_mode=True,
+            rerank=False,
         )
 
         ask_module._search_documents(req)
@@ -219,7 +224,7 @@ class TestDedupeKey:
             search_chunks=[same_idx_a, same_idx_b],
             full_doc_chunks=[],
         )
-        req = AskRequest(query="hybrid 검색?", top_k=5)
+        req = AskRequest(query="hybrid 검색?", top_k=5, rerank=False)
 
         chunks, _ = ask_module._search_documents(req)
         sources = sorted(c.metadata["source"] for c in chunks)
