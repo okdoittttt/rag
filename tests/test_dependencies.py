@@ -55,6 +55,12 @@ def _build_app(monkeypatch, *, api_key: str | None, env: str | None = None):
     def _health():
         return {"status": "ok"}
 
+    # Starlette 는 미들웨어를 지연 생성하므로 ``add_middleware`` 만으로는
+    # ``APIKeyMiddleware.__init__`` 이 호출되지 않는다. 실제 앱 기동(startup)
+    # 시 일어나는 미들웨어 스택 구축을 여기서 명시적으로 재현해, production
+    # fail-fast(키 미설정 시 RuntimeError)가 기동 시점에 발생함을 검증한다.
+    app.build_middleware_stack()
+
     return app
 
 
