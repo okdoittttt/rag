@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile, mkdir } from "fs/promises";
+import { createWriteStream } from "fs";
+import { mkdir, stat } from "fs/promises";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 import path from "path";
 
 const API_BASE_URL = process.env.API_URL || process.env.API_BASE_URL || "http://127.0.0.1:8000";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "./data/uploads";
+const ALLOWED_EXTENSIONS = [".txt", ".md", ".pdf"];
 
 export async function POST(req: NextRequest) {
     try {
-        // 세션에서 user_id 추출
+        // 세션에서 user_id 추출 (이 라우트는 미들웨어 matcher에서 제외되므로
+        // 인증을 핸들러에서 직접 수행한다)
         const session = await auth();
         if (!session?.user?.id) {
             return NextResponse.json({ error: "인증이 필요합니다." }, { status: 401 });
@@ -17,94 +22,128 @@ export async function POST(req: NextRequest) {
 
         const userId = session.user.id;
 
-        // FormData에서 파일 추출
-        const formData = await req.formData();
-        const file = formData.get("file") as File | null;
-
-        if (!file) {
-            return NextResponse.json({ error: "파일이 없습니다." }, { status: 400 });
+        // 파일명은 x-filename 헤더로 전달받는다 (본문은 파일 raw 바이트 스트림).
+        const rawFilename = req.headers.get("x-filename");
+        if (!rawFilename) {
+            return NextResponse.json(
+                { error: "파일명이 없습니다. (x-filename 헤더 필요)" },
+                { status: 400 }
+            );
         }
+        const originalFilename = decodeURIComponent(rawFilename);
 
         // 파일 확장자 검증
-        const allowedExtensions = [".txt", ".md", ".pdf"];
-        const ext = "." + file.name.split(".").pop()?.toLowerCase();
-        if (!allowedExtensions.includes(ext)) {
+        const ext = "." + originalFilename.split(".").pop()?.toLowerCase();
+        if (!ALLOWED_EXTENSIONS.includes(ext)) {
             return NextResponse.json(
                 { error: "지원되지 않는 파일 형식입니다. (.txt, .md, .pdf만 지원)" },
                 { status: 400 }
             );
         }
 
-        // 파일 버퍼 읽기 (텍스트 변환 제거)
-        const fileBuffer = Buffer.from(await file.arrayBuffer());
+        if (!req.body) {
+            return NextResponse.json(
+                { error: "업로드할 파일 본문이 없습니다." },
+                { status: 400 }
+            );
+        }
 
         // 사용자별 업로드 디렉토리 생성
         const userUploadDir = path.resolve(UPLOAD_DIR, userId);
         await mkdir(userUploadDir, { recursive: true });
 
-        // 고유 파일명 생성 (타임스탬프 + 원본명)
+        // 고유 파일명 생성 (타임스탬프 + 원본명 sanitize)
         const timestamp = Date.now();
-        const safeFilename = file.name.replace(/[^a-zA-Z0-9가-힣._-]/g, "_");
+        const safeFilename = originalFilename.replace(/[^a-zA-Z0-9가-힣._-]/g, "_");
         const storedFilename = `${timestamp}_${safeFilename}`;
         const filepath = path.join(userUploadDir, storedFilename);
 
-        // 파일 저장 (절대 경로 사용)
-        await writeFile(filepath, fileBuffer);
+        // 파일을 메모리에 통째로 적재하지 않고 스트리밍으로 디스크에 기록한다.
+        const nodeStream = Readable.fromWeb(req.body as Parameters<typeof Readable.fromWeb>[0]);
+        await pipeline(nodeStream, createWriteStream(filepath));
 
-        // 백엔드 /index API 호출
-        // content 대신 file_path 전달 (백엔드에서 파싱)
-        console.log(`Sending upload request to backend: ${API_BASE_URL}/index`);
+        // 저장된 파일 크기 (스트리밍이므로 디스크에서 조회)
+        const { size: filesize } = await stat(filepath);
+        const mimetype = req.headers.get("content-type") || "application/octet-stream";
 
-        let response;
-        try {
-            response = await fetch(`${API_BASE_URL}/index`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-API-Key": process.env.API_KEY || "",
-                    "Connection": "close",
-                },
-                body: JSON.stringify({
-                    file_path: filepath,
-                    filename: file.name,
-                    user_id: userId,
-                }),
-                cache: "no-store",
-            });
-        } catch (fetchError) {
-            console.error(`Fetch failed for ${API_BASE_URL}/index:`, fetchError);
-            throw fetchError;
-        }
+        // 백엔드 /index/stream(SSE) 호출 → 진행 이벤트를 클라이언트로 그대로 relay
+        const backendRes = await fetch(`${API_BASE_URL}/index/stream`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-Key": process.env.API_KEY || "",
+            },
+            body: JSON.stringify({
+                file_path: filepath,
+                filename: originalFilename,
+                user_id: userId,
+            }),
+            cache: "no-store",
+        });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Backend returned error ${response.status}:`, errorText);
+        if (!backendRes.ok || !backendRes.body) {
+            const errorText = await backendRes.text().catch(() => "");
+            console.error(`Backend stream error ${backendRes.status}:`, errorText);
             return NextResponse.json(
-                { error: `백엔드 처리 실패: ${response.status} - ${errorText}` },
-                { status: response.status }
+                { error: `백엔드 처리 실패: ${backendRes.status}` },
+                { status: backendRes.status || 502 }
             );
         }
 
-        const data = await response.json();
-        const chunkCount = data.chunk_count || 0;
+        // SSE를 클라이언트로 파이핑하면서 done 이벤트의 chunk_count를 가로채,
+        // 스트림 종료(flush) 시점에 문서 메타데이터를 DB에 저장한다.
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let chunkCount = 0;
+        let sawError = false;
 
-        // DB에 문서 정보 저장
-        const document = await prisma.document.create({
-            data: {
-                filename: file.name,
-                filepath: filepath,
-                filesize: fileBuffer.length,
-                mimetype: file.type || "text/plain",
-                chunkCount: chunkCount,
-                userId: userId,
+        const transform = new TransformStream({
+            transform(chunk, controller) {
+                controller.enqueue(chunk); // 클라이언트로 그대로 relay
+                buffer += decoder.decode(chunk, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    const data = line.slice(6);
+                    if (data === "[DONE]") continue;
+                    try {
+                        const ev = JSON.parse(data);
+                        if (ev.phase === "done") {
+                            chunkCount = ev.chunk_count ?? 0;
+                        } else if (ev.phase === "error") {
+                            sawError = true;
+                        }
+                    } catch {
+                        // 진행 이벤트 파싱 실패는 무시 (relay에는 영향 없음)
+                    }
+                }
+            },
+            async flush() {
+                if (sawError) return;
+                try {
+                    await prisma.document.create({
+                        data: {
+                            filename: originalFilename,
+                            filepath: filepath,
+                            filesize: filesize,
+                            mimetype: mimetype,
+                            chunkCount: chunkCount,
+                            userId: userId,
+                        },
+                    });
+                } catch (e) {
+                    console.error("DB save error after indexing:", e);
+                }
             },
         });
 
-        return NextResponse.json({
-            message: `${file.name} 업로드 완료 (${chunkCount}개 청크 생성)`,
-            chunk_count: chunkCount,
-            filename: file.name,
-            document_id: document.id,
+        return new Response(backendRes.body.pipeThrough(transform), {
+            headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
         });
     } catch (error) {
         console.error("Upload error:", error);

@@ -43,5 +43,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-    matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
+    // /api/upload 은 제외한다. 미들웨어(proxy)를 거치면 Next.js 가 요청 본문을
+    // 메모리에 버퍼링해 대용량 스트리밍 업로드의 의미가 사라지기 때문이다.
+    // 해당 라우트의 인증은 핸들러 내부의 auth() 호출로 직접 수행한다.
+    matcher: ["/((?!_next/static|_next/image|favicon.ico|api/upload|.*\\..*).*)"],
 };

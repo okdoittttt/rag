@@ -8,8 +8,10 @@
 
 from __future__ import annotations
 
+import json
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -33,6 +35,9 @@ def client(monkeypatch, tmp_path):
     fake_searcher.delete_by_source.return_value = 0
     fake_searcher.index.return_value = None
     fake_searcher.save.return_value = None
+    # /index/stream 은 searcher.embedder.embed 를 배치 단위로 직접 호출하므로
+    # 입력 텍스트 수만큼의 (N, dim) numpy 배열을 반환하도록 설정한다.
+    fake_searcher.embedder.embed.side_effect = lambda texts: np.zeros((len(texts), 4), dtype=np.float32)
     monkeypatch.setattr(index_module, "get_searcher", lambda: fake_searcher)
     monkeypatch.setattr(index_module, "get_searcher_lock", lambda: _NullLock())
 
@@ -174,3 +179,94 @@ def test_delete_index_by_source_no_match_returns_zero(monkeypatch, tmp_path):
     assert resp.json()["deleted_count"] == 0
     fake_searcher.delete_by_source.assert_called_once_with("ghost.txt", user_id="u1")
     fake_searcher.save.assert_not_called()
+
+
+def _parse_sse(raw: str) -> list[dict | str]:
+    """SSE 본문의 ``data:`` 라인을 파싱한다.
+
+    Args:
+        raw: ``text/event-stream`` 응답 본문 전체.
+
+    Returns:
+        각 이벤트 페이로드 리스트. JSON 이벤트는 ``dict`` 로, 종료 신호는
+        문자열 ``"[DONE]"`` 로 반환한다.
+    """
+    events: list[dict | str] = []
+    for line in raw.splitlines():
+        if not line.startswith("data: "):
+            continue
+        payload = line[len("data: "):]
+        events.append(payload if payload == "[DONE]" else json.loads(payload))
+    return events
+
+
+class TestIndexStream:
+    """``/index/stream`` SSE 엔드포인트 동작 검증."""
+
+    def test_stream_emits_phases_in_order(self, client, tmp_path):
+        """파싱→청킹→임베딩→인덱싱→done→[DONE] 순서로 이벤트를 흘린다."""
+        target = tmp_path / "doc.txt"
+        target.write_text("문장 하나입니다. " * 800, encoding="utf-8")
+
+        resp = client.post(
+            "/index/stream",
+            json={"file_path": str(target), "filename": "doc.txt", "user_id": "u1"},
+        )
+        assert resp.status_code == 200, resp.text
+
+        events = _parse_sse(resp.text)
+        assert events[-1] == "[DONE]"
+
+        parsed = [e for e in events if isinstance(e, dict)]
+        phases = [e["phase"] for e in parsed]
+        assert phases[0] == "parsing"
+        assert "chunking" in phases
+        assert "embedding" in phases
+        assert "indexing" in phases
+        assert phases[-1] == "done"
+
+    def test_stream_done_chunk_count_matches_chunking_total(self, client, tmp_path):
+        """done 의 chunk_count 와 chunking/embedding 의 total 이 일치한다."""
+        target = tmp_path / "doc.txt"
+        target.write_text("문장 하나입니다. " * 800, encoding="utf-8")
+
+        resp = client.post(
+            "/index/stream",
+            json={"file_path": str(target), "filename": "doc.txt", "user_id": "u1"},
+        )
+        parsed = [e for e in _parse_sse(resp.text) if isinstance(e, dict)]
+
+        chunking = next(e for e in parsed if e["phase"] == "chunking")
+        done = next(e for e in parsed if e["phase"] == "done")
+        embedding = [e for e in parsed if e["phase"] == "embedding"]
+
+        assert chunking["total"] >= 1
+        assert done["chunk_count"] == chunking["total"]
+        # 임베딩 진행률은 마지막에 total 까지 도달해야 한다.
+        assert embedding[-1]["current"] == embedding[-1]["total"] == chunking["total"]
+
+    def test_stream_indexes_with_precomputed_embeddings(self, client, tmp_path):
+        """임베딩을 미리 만들어 searcher.index(embeddings=...) 로 전달한다."""
+        from api.routes import index as index_module
+
+        target = tmp_path / "doc.txt"
+        target.write_text("짧은 본문입니다.", encoding="utf-8")
+
+        resp = client.post(
+            "/index/stream",
+            json={"file_path": str(target), "filename": "doc.txt", "user_id": "u1"},
+        )
+        assert resp.status_code == 200
+
+        fake_searcher = index_module.get_searcher()
+        # index 호출 시 embeddings 키워드가 None 이 아니어야 (재임베딩 생략)
+        _, kwargs = fake_searcher.index.call_args
+        assert kwargs.get("embeddings") is not None
+
+    def test_stream_empty_request_emits_error(self, client):
+        """content/file_path 모두 없으면 error 이벤트를 흘린다 (HTTP는 200)."""
+        resp = client.post("/index/stream", json={"filename": "x.txt"})
+        assert resp.status_code == 200
+
+        parsed = [e for e in _parse_sse(resp.text) if isinstance(e, dict)]
+        assert any(e["phase"] == "error" for e in parsed)

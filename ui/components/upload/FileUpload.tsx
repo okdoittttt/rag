@@ -7,11 +7,33 @@ interface FileUploadProps {
     onUploadComplete?: () => void;
 }
 
+type IndexPhase = "parsing" | "chunking" | "preparing" | "embedding" | "indexing";
+
 interface UploadStatus {
     file: File;
     status: "pending" | "uploading" | "success" | "error";
     message?: string;
     chunkCount?: number;
+    phase?: IndexPhase;
+    embedProgress?: number; // 임베딩 단계 진행률(0-100)
+}
+
+/** 인덱싱 단계(phase)를 사용자에게 보여줄 한국어 라벨로 변환한다. */
+function phaseLabel(phase?: IndexPhase, embedProgress?: number): string {
+    switch (phase) {
+        case "parsing":
+            return "파싱 중…";
+        case "chunking":
+            return "청킹 중…";
+        case "preparing":
+            return "준비 중 (모델 로딩)…";
+        case "embedding":
+            return `임베딩 중… ${embedProgress ?? 0}%`;
+        case "indexing":
+            return "인덱싱 중…";
+        default:
+            return "처리 중…";
+    }
 }
 
 export default function FileUpload({ onUploadComplete }: FileUploadProps) {
@@ -29,23 +51,70 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
         setIsDragging(false);
     }, []);
 
-    const uploadFile = async (file: File): Promise<{ success: boolean; message: string; chunkCount?: number }> => {
-        const formData = new FormData();
-        formData.append("file", file);
-
+    const uploadFile = async (
+        file: File,
+        onPhase: (phase: IndexPhase, embedProgress?: number) => void
+    ): Promise<{ success: boolean; message: string; chunkCount?: number }> => {
+        // 파일을 raw 바이트로 전송하고(본문), 서버가 돌려주는 SSE 진행 이벤트를
+        // 읽어 파싱→임베딩→인덱싱 단계를 실시간 표시한다.
         try {
             const response = await fetch("/api/upload", {
                 method: "POST",
-                body: formData,
+                headers: { "x-filename": encodeURIComponent(file.name) },
+                body: file,
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                return { success: false, message: data.error || "업로드 실패" };
+            if (!response.ok || !response.body) {
+                let msg = `업로드 실패 (${response.status})`;
+                try {
+                    const d = await response.json();
+                    msg = d.error || msg;
+                } catch {
+                    // JSON 응답이 아니면 기본 메시지 유지
+                }
+                return { success: false, message: msg };
             }
 
-            return { success: true, message: data.message, chunkCount: data.chunk_count };
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let chunkCount = 0;
+            let errorDetail = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    const data = line.slice(6);
+                    if (data === "[DONE]") continue;
+                    try {
+                        const ev = JSON.parse(data);
+                        if (ev.phase === "embedding") {
+                            const pct = ev.total ? Math.round((ev.current / ev.total) * 100) : 0;
+                            onPhase("embedding", pct);
+                        } else if (ev.phase === "done") {
+                            chunkCount = ev.chunk_count ?? 0;
+                        } else if (ev.phase === "error") {
+                            errorDetail = ev.detail || "인덱싱 오류";
+                        } else if (ev.phase) {
+                            onPhase(ev.phase as IndexPhase);
+                        }
+                    } catch {
+                        // 진행 이벤트 파싱 실패는 무시
+                    }
+                }
+            }
+
+            if (errorDetail) {
+                return { success: false, message: errorDetail };
+            }
+            return { success: true, message: `${chunkCount}개 청크 생성`, chunkCount };
         } catch (error) {
             return { success: false, message: error instanceof Error ? error.message : "네트워크 오류" };
         }
@@ -92,10 +161,18 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
             if (uploads[i].status !== "pending" && uploads[i].status !== "error") continue;
 
             setUploads((prev) =>
-                prev.map((u, idx) => (idx === i ? { ...u, status: "uploading" } : u))
+                prev.map((u, idx) => (idx === i ? { ...u, status: "uploading", phase: "parsing", embedProgress: undefined } : u))
             );
 
-            const result = await uploadFile(uploads[i].file);
+            const result = await uploadFile(uploads[i].file, (phase, embedProgress) => {
+                setUploads((prev) =>
+                    prev.map((u, idx) =>
+                        idx === i
+                            ? { ...u, phase, embedProgress: phase === "embedding" ? embedProgress : u.embedProgress }
+                            : u
+                    )
+                );
+            });
 
             setUploads((prev) =>
                 prev.map((u, idx) =>
@@ -229,6 +306,21 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
                                     )}
                                     {upload.status === "pending" && (
                                         <p className="text-xs text-gray-500">대기중</p>
+                                    )}
+                                    {upload.status === "uploading" && (
+                                        <div className="mt-1">
+                                            {upload.phase === "embedding" && (
+                                                <div className="h-1 w-full bg-white/10 rounded">
+                                                    <div
+                                                        className="h-1 bg-blue-500 rounded transition-all"
+                                                        style={{ width: `${upload.embedProgress ?? 0}%` }}
+                                                    />
+                                                </div>
+                                            )}
+                                            <p className="text-xs text-blue-400 mt-0.5">
+                                                {phaseLabel(upload.phase, upload.embedProgress)}
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             </div>

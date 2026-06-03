@@ -88,6 +88,102 @@ class TestSplitText:
         assert chunks[0].metadata["chunk_index"] == 0
 
 
+class TestWordBoundarySplitting:
+    """단어 경계 보존 및 미니 청크 병합 테스트"""
+
+    def test_no_mid_word_cut_for_separatorless_text(self) -> None:
+        """구분자 없는 긴 텍스트에서 단어 중간 절단이 발생하지 않음"""
+        # "단어"를 공백으로 이어 붙인 긴 텍스트(문단/문장 구분자 없음)
+        word = "단어"
+        text = " ".join([word] * 200)
+        chunks = split_text(text, chunk_size=80, chunk_overlap=0)
+
+        assert len(chunks) > 1
+        # 각 청크 본문 자체에 깨진 단어("단" 또는 "어" 단독)가 없어야 함
+        for chunk in chunks:
+            assert not chunk.content.startswith("어 ")
+            assert not chunk.content.endswith(" 단")
+
+    def test_adjacent_chunks_do_not_split_word(self) -> None:
+        """인접 청크 경계가 단어 중간을 자르지 않음(토큰 온전성 검증)"""
+        text = " ".join(["alpha", "bravo", "charlie", "delta"] * 60)
+        chunks = split_text(text, chunk_size=70, chunk_overlap=0)
+
+        words = set(text.split())
+        for chunk in chunks:
+            # 청크 양끝 토큰이 사전에 존재하는 온전한 단어여야 함
+            tokens = chunk.content.split()
+            assert tokens, "빈 청크가 생성되면 안 됨"
+            assert tokens[0] in words
+            assert tokens[-1] in words
+
+    def test_mixed_korean_english_number(self) -> None:
+        """한국어+영문+숫자 혼재 입력에서 정상 분할"""
+        unit = "회의는 Aug 2023 에 진행되었고 결과는 95점 입니다. "
+        text = unit * 30
+        chunks = split_text(text, chunk_size=120, chunk_overlap=20)
+
+        assert len(chunks) > 1
+        # "Aug"가 "A" / "ug"처럼 쪼개져 청크 끝/시작에 남지 않아야 함
+        for chunk in chunks:
+            assert not chunk.content.endswith("A")
+            assert not chunk.content.startswith("ug ")
+
+    def test_overlap_start_is_word_boundary(self) -> None:
+        """오버랩 시작점이 단어 경계인지 검증"""
+        text = " ".join([f"word{i:03d}" for i in range(200)])
+        chunks = split_text(text, chunk_size=90, chunk_overlap=30)
+
+        words = set(text.split())
+        # 첫 청크를 제외한 모든 청크는 온전한 단어로 시작해야 함
+        for chunk in chunks[1:]:
+            first_token = chunk.content.split()[0]
+            assert first_token in words
+
+    def test_mini_chunk_merged_into_neighbor(self) -> None:
+        """50자 미만 미니 청크가 인접 청크에 병합되어 단독으로 남지 않음"""
+        # 큰 본문 뒤에 아주 짧은 꼬리를 붙여 마지막 미니 청크 발생 유도
+        text = "가나다라마바사아자차카타파하 " * 50 + "끝."
+        chunks = split_text(text, chunk_size=200, chunk_overlap=0)
+
+        # 마지막 청크가 50자 미만으로 단독 생성되면 안 됨
+        assert all(
+            len(c.content) >= 50 or len(chunks) == 1 for c in chunks
+        )
+        # 꼬리 텍스트("끝.")는 마지막 청크에 포함되어야 함
+        assert chunks[-1].content.rstrip().endswith("끝.")
+
+    def test_chunk_index_and_positions_consistency(self) -> None:
+        """chunk_index 연속성과 start_char/end_char 정합성 검증"""
+        text = " ".join([f"token{i:04d}" for i in range(300)])
+        chunks = split_text(text, chunk_size=120, chunk_overlap=30)
+
+        # chunk_index는 0부터 빈틈없이 연속
+        indices = [c.metadata["chunk_index"] for c in chunks]
+        assert indices == list(range(len(chunks)))
+
+        # start_char/end_char는 원문 범위 안에서 단조 증가하는 정합성 유지
+        for c in chunks:
+            sc = c.metadata["start_char"]
+            ec = c.metadata["end_char"]
+            assert 0 <= sc < ec <= len(text)
+        starts = [c.metadata["start_char"] for c in chunks]
+        assert starts == sorted(starts)
+
+    def test_long_unbreakable_token_falls_back(self) -> None:
+        """경계 없는 초장문 토큰에서 폴백 동작(무한 루프/예외 없음)"""
+        text = "x" * 500
+        chunks = split_text(text, chunk_size=100, chunk_overlap=0)
+
+        assert len(chunks) >= 1
+        # 모든 본문을 합치면 원문 길이를 복원(폴백 강제 분할이 동작)
+        assert sum(len(c.content) for c in chunks) == len(text)
+        # 인덱스 연속성 유지
+        assert [c.metadata["chunk_index"] for c in chunks] == list(
+            range(len(chunks))
+        )
+
+
 class TestSplitMarkdown:
     """Markdown 분할 테스트"""
     
