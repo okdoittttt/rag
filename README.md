@@ -119,8 +119,9 @@ vi .env
 #   OLLAMA_BASE_URL=...       # Ollama 사용 시 (옵션)
 
 # 2. 프론트엔드 환경 변수 설정 (NextAuth)
-#   ui/.env 에 AUTH_SECRET 등 설정
-#   예) AUTH_SECRET=$(openssl rand -base64 32)
+cp ui/.env.example ui/.env       # 도커용
+#   AUTH_SECRET=$(openssl rand -base64 32)  로 채우고
+#   API_KEY 는 위 .env 의 값과 동일하게 맞춘다.
 
 # 3. 서비스 실행
 docker compose up -d --build
@@ -178,6 +179,13 @@ PYTHONPATH=src uv run uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
 새 터미널을 열고 Next.js 클라이언트를 실행합니다.
 ```bash
 cd ui
+
+# 환경 변수 설정 (.env.local 은 .env 보다 우선 로드됨)
+cp .env.example .env.local
+#   AUTH_SECRET : openssl rand -base64 32 로 생성
+#   API_KEY     : 루트 .env 의 값과 동일하게
+#   API_URL     : 로컬 직접 실행 시 http://127.0.0.1:8000
+#   UPLOAD_DIR  : 백엔드 허용 경로와 일치 (절대경로 권장, 예: <repo>/data/uploads)
 
 # 의존성 설치
 npm install
