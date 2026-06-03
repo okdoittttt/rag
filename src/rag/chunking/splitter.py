@@ -218,9 +218,15 @@ def split_text(
         if start + split_point >= len(text):
             break
 
-        # 오버랩을 적용하되 단어 경계로 스냅, 최소한 1자는 진행
-        proposed = start + split_point - chunk_overlap
-        next_start = _snap_overlap_start(text, proposed, start + split_point)
+        # 오버랩은 청크보다 짧을 때만 의미가 있다. 청크가 오버랩 이하로 짧으면
+        # (짧은 단락·푸터 등) 오버랩을 생략하고 청크 끝으로 전진해, next_start 가
+        # 뒤로 밀려 1자씩만 나아가는 마이크로청크 폭증을 방지한다.
+        if split_point > chunk_overlap:
+            # 오버랩을 적용하되 단어 경계로 스냅, 최소한 1자는 진행
+            proposed = start + split_point - chunk_overlap
+            next_start = _snap_overlap_start(text, proposed, start + split_point)
+        else:
+            next_start = start + split_point
         start = max(next_start, start + 1)
 
     # 2단계: 과소 청크 병합

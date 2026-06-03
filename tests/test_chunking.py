@@ -183,6 +183,35 @@ class TestWordBoundarySplitting:
             range(len(chunks))
         )
 
+    def test_short_paragraph_then_long_body_no_microchunk_explosion(self) -> None:
+        """짧은 단락 뒤 긴 본문에서 마이크로청크 폭증이 일어나지 않음.
+
+        과거 버그: 짧은 단락(split_point < chunk_overlap) 다음 시작점이 뒤로 밀려
+        1자씩만 전진 → 거의 동일한 청크 수천 개가 양산되었다. 청크 수가 원문
+        글자수가 아니라 chunk_size에 비례하는지 검증한다.
+        """
+        # 푸터 같은 짧은 단락 + 구분자 없는 긴 본문을 반복.
+        short = "footer.\n\n"          # 오버랩(200)보다 짧은 단락
+        long_body = "word " * 800       # 약 4000자, 내부에 \n\n 없음
+        text = (short + long_body) * 5
+        chunks = split_text(text, chunk_size=1500, chunk_overlap=200)
+
+        # 청크 수는 원문 길이/청크 크기 수준이어야 한다(글자수에 비례하면 버그).
+        # 수정 전이면 수천 개라 이 상한에서 실패한다.
+        assert len(chunks) < len(text) // 200
+
+    def test_overlap_does_not_create_one_char_shifted_duplicates(self) -> None:
+        """인접 청크가 1글자만 민 근접 중복이 아님(슬라이딩 버그 회귀 방지)."""
+        short = "x.\n\n"
+        long_body = "alpha bravo charlie delta echo " * 100
+        text = short + long_body
+        chunks = split_text(text, chunk_size=500, chunk_overlap=100)
+
+        contents = [c.content for c in chunks]
+        for a, b in zip(contents, contents[1:]):
+            # b 가 a 를 한 칸 민 것과 동일하면 1자 슬라이딩 버그다.
+            assert not (len(a) == len(b) and a[1:] == b[:-1])
+
 
 class TestSplitMarkdown:
     """Markdown 분할 테스트"""
