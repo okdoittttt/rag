@@ -35,6 +35,7 @@ Python(FastAPI) 백엔드와 Next.js 프론트엔드로 구성되어 있으며, 
 - **유연한 모델 지원**:
   - **Cloud**: Google Gemini (기본 `gemini-2.5-flash`)
   - **Local**: Ollama (Llama 3, Mistral 등) 연동 가능
+  - **Embedding**: Google Gemini Embedding 2 (`gemini-embedding-2`, **기본**) / 로컬 SentenceTransformers 전환 가능 (`embedding.provider`)
   - **Vector Store**: Qdrant(기본) / FAISS 선택
 - **CLI 도구**: 인덱싱·검색·질의를 터미널에서 직접 수행 (`rag` / `python main.py`)
 - **평가 파이프라인**: 검색 메트릭(Recall@k, MRR 등) + RAGAS(LLM-as-judge) 정량 평가 및 리포트 생성
@@ -58,7 +59,7 @@ graph TD
     subgraph Ingestion
         Upload["File Upload"] --> Parser["Document Parser (txt/md/pdf)"]
         Parser --> Chunker["Chunker (text / markdown / semantic)"]
-        Chunker --> Embedder["Embedding Model"]
+        Chunker --> Embedder["Embedding (Gemini / Local)"]
         Embedder --> VectorDB
     end
 
@@ -88,7 +89,7 @@ graph TD
 
 ### AI & Infrastructure
 - **Vector DB**: Qdrant (Docker, 기본) / FAISS (옵션)
-- **Embedding**: SentenceTransformers (`paraphrase-multilingual-MiniLM-L12-v2`, 384-dim)
+- **Embedding**: Google Gemini Embedding 2 (`gemini-embedding-2`, 3072-dim, **기본**) / 로컬 SentenceTransformers 선택 가능 (`embedding.provider` 설정으로 전환)
 - **LLM**: Google Gemini API / Ollama
 - **Reranker**: `BAAI/bge-reranker-v2-m3` (Cross-Encoder)
 - **Keyword Search**: rank-bm25
