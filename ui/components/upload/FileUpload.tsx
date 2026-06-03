@@ -12,6 +12,7 @@ interface UploadStatus {
     status: "pending" | "uploading" | "success" | "error";
     message?: string;
     chunkCount?: number;
+    progress?: number;
 }
 
 export default function FileUpload({ onUploadComplete }: FileUploadProps) {
@@ -29,26 +30,40 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
         setIsDragging(false);
     }, []);
 
-    const uploadFile = async (file: File): Promise<{ success: boolean; message: string; chunkCount?: number }> => {
-        const formData = new FormData();
-        formData.append("file", file);
+    const uploadFile = (
+        file: File,
+        onProgress: (pct: number) => void
+    ): Promise<{ success: boolean; message: string; chunkCount?: number }> => {
+        // XHR을 사용해 파일을 raw 바이트로 전송한다. fetch는 업로드 진행률
+        // 이벤트를 지원하지 않으므로 진행률 표시를 위해 XHR을 사용한다.
+        return new Promise((resolve) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open("POST", "/api/upload");
+            // 파일명은 헤더로 전달 (본문은 파일 raw 바이트 스트림)
+            xhr.setRequestHeader("x-filename", encodeURIComponent(file.name));
 
-        try {
-            const response = await fetch("/api/upload", {
-                method: "POST",
-                body: formData,
-            });
+            xhr.upload.onprogress = (e) => {
+                if (e.lengthComputable) {
+                    onProgress(Math.round((e.loaded / e.total) * 100));
+                }
+            };
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                return { success: false, message: data.error || "업로드 실패" };
-            }
-
-            return { success: true, message: data.message, chunkCount: data.chunk_count };
-        } catch (error) {
-            return { success: false, message: error instanceof Error ? error.message : "네트워크 오류" };
-        }
+            xhr.onload = () => {
+                let data: { message?: string; error?: string; chunk_count?: number } = {};
+                try {
+                    data = JSON.parse(xhr.responseText);
+                } catch {
+                    // JSON 파싱 실패 시 빈 객체 유지
+                }
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    resolve({ success: true, message: data.message ?? "업로드 완료", chunkCount: data.chunk_count });
+                } else {
+                    resolve({ success: false, message: data.error ?? `업로드 실패 (${xhr.status})` });
+                }
+            };
+            xhr.onerror = () => resolve({ success: false, message: "네트워크 오류" });
+            xhr.send(file);
+        });
     };
 
     const addFiles = (files: FileList | File[]) => {
@@ -92,10 +107,14 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
             if (uploads[i].status !== "pending" && uploads[i].status !== "error") continue;
 
             setUploads((prev) =>
-                prev.map((u, idx) => (idx === i ? { ...u, status: "uploading" } : u))
+                prev.map((u, idx) => (idx === i ? { ...u, status: "uploading", progress: 0 } : u))
             );
 
-            const result = await uploadFile(uploads[i].file);
+            const result = await uploadFile(uploads[i].file, (pct) => {
+                setUploads((prev) =>
+                    prev.map((u, idx) => (idx === i ? { ...u, progress: pct } : u))
+                );
+            });
 
             setUploads((prev) =>
                 prev.map((u, idx) =>
@@ -229,6 +248,19 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
                                     )}
                                     {upload.status === "pending" && (
                                         <p className="text-xs text-gray-500">대기중</p>
+                                    )}
+                                    {upload.status === "uploading" && (
+                                        <div className="mt-1">
+                                            <div className="h-1 w-full bg-white/10 rounded">
+                                                <div
+                                                    className="h-1 bg-blue-500 rounded transition-all"
+                                                    style={{ width: `${upload.progress ?? 0}%` }}
+                                                />
+                                            </div>
+                                            <p className="text-xs text-blue-400 mt-0.5">
+                                                업로드 중… {upload.progress ?? 0}%
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             </div>
