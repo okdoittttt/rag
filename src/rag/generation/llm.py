@@ -12,8 +12,8 @@ from abc import ABC, abstractmethod
 from typing import Iterator, Optional
 
 import requests
-import google.generativeai as genai
-from google.api_core import exceptions
+from google import genai
+from google.genai import types, errors
 from dotenv import load_dotenv
 
 from rag.config import get_config, GenerationConfig
@@ -106,8 +106,13 @@ class LLM(ABC):
 
 
 class GeminiLLM(LLM):
-    """Google Gemini API 구현체"""
-    
+    """Google Gemini API 구현체 (``google-genai`` SDK).
+
+    프롬프트 기반 CoT 를 직접 구현하므로 모델의 네이티브 thinking 은 비활성화한다
+    (``thinking_budget=0``). 단, 비활성화를 지원하지 않는 ``2.5-pro`` 계열은
+    제외한다(모델명에 ``pro`` 포함 시 thinking_config 를 생략).
+    """
+
     def __init__(
         self,
         model_name: str | None = None,
@@ -115,26 +120,51 @@ class GeminiLLM(LLM):
     ):
         config = get_config()
         self.model_name = model_name or config.generation.model
-        
+        self.temperature = config.generation.temperature
+        self.max_tokens = config.generation.max_tokens
+
         # API 키 로드
         self.api_key = api_key or os.getenv("GOOGLE_API_KEY")
         if not self.api_key:
             raise ValueError(
                 "Google API Key not found. Please set GOOGLE_API_KEY environment variable."
             )
-            
+
         try:
-            genai.configure(api_key=self.api_key)
-            self.model = genai.GenerativeModel(self.model_name)
+            self.client = genai.Client(api_key=self.api_key)
             logger.info("gemini_initialized", model=self.model_name)
         except Exception as e:
             logger.error("gemini_init_failed", error=str(e))
             raise
-            
+
+    def _build_config(self) -> types.GenerateContentConfig:
+        """생성 옵션을 구성한다.
+
+        온도/최대 출력 토큰을 설정값에서 가져오고, thinking 비활성화를 지원하는
+        모델(2.5-pro 제외)에 한해 ``thinking_budget=0`` 으로 네이티브 사고를 끈다.
+
+        Returns:
+            구성된 ``types.GenerateContentConfig`` 인스턴스.
+        """
+        thinking_config = None
+        # 2.5-pro 는 thinking 을 끌 수 없으므로 제외한다.
+        if "pro" not in (self.model_name or "").lower():
+            thinking_config = types.ThinkingConfig(thinking_budget=0)
+
+        return types.GenerateContentConfig(
+            temperature=self.temperature,
+            max_output_tokens=self.max_tokens,
+            thinking_config=thinking_config,
+        )
+
     def generate(self, prompt: str) -> str:
         try:
             logger.debug("gemini_generating", prompt_length=len(prompt))
-            response = self.model.generate_content(prompt)
+            response = self.client.models.generate_content(
+                model=self.model_name,
+                contents=prompt,
+                config=self._build_config(),
+            )
 
             text = _extract_gemini_text(response)
             if not text:
@@ -147,8 +177,8 @@ class GeminiLLM(LLM):
                 return "죄송합니다. 답변을 생성할 수 없습니다."
 
             return text
-            
-        except exceptions.GoogleAPIError as e:
+
+        except errors.APIError as e:
             logger.error("gemini_api_error", error=str(e))
             return f"API 오류: {str(e)}"
         except Exception as e:
@@ -159,14 +189,17 @@ class GeminiLLM(LLM):
         """Gemini 스트리밍 응답 생성"""
         try:
             logger.debug("gemini_streaming", prompt_length=len(prompt))
-            response = self.model.generate_content(prompt, stream=True)
+            response = self.client.models.generate_content_stream(
+                model=self.model_name,
+                contents=prompt,
+                config=self._build_config(),
+            )
 
             yielded = False
             last_finish_reason: object | None = None
             for chunk in response:
                 last_finish_reason = _chunk_finish_reason(chunk) or last_finish_reason
-                # chunk.text 빠른 접근자는 Part 가 없는 청크에서 예외를 던지므로
-                # 직접 추출한다(part 없는 종료 청크는 빈 문자열 → 건너뜀).
+                # Part 가 없는 청크(종료 청크 등)는 빈 문자열 → 건너뛴다.
                 text = _extract_gemini_text(chunk)
                 if not text:
                     logger.debug(
@@ -188,7 +221,7 @@ class GeminiLLM(LLM):
                 )
                 yield "죄송합니다. 모델이 빈 응답을 반환했습니다. (서버 로그의 finish_reason 을 확인해 주세요.)"
 
-        except exceptions.GoogleAPIError as e:
+        except errors.APIError as e:
             logger.error("gemini_stream_error", error=str(e))
             yield f"API 오류: {str(e)}"
         except Exception as e:

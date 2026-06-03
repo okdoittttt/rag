@@ -94,7 +94,9 @@ class GenerationConfig(BaseModel):
     provider: Literal["gemini", "ollama"] = "gemini"
     model: str | None = Field(default_factory=lambda: os.getenv("GOOGLE_MODEL"))
     temperature: float = Field(default=0.1, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=1024, ge=1)
+    # CoT(추론+답변) 출력이 잘리지 않도록 여유를 둔다. Gemini 응답의
+    # max_output_tokens 로 사용되며, Ollama 는 num_predict 를 별도 하드코딩한다.
+    max_tokens: int = Field(default=4096, ge=1)
     
     # Provider-specific configs
     ollama: OllamaConfig = Field(default_factory=OllamaConfig)
