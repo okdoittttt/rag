@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# 단, 예시 템플릿은 추적하여 신규 개발자 온보딩을 돕는다.
+!.env.example
 
 # sqlite (prisma) — 회원 데이터가 커밋되지 않도록 명시
 *.db
