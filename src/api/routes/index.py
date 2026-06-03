@@ -3,10 +3,13 @@
 문서 인덱싱 엔드포인트
 """
 
+import json
 import os
 from pathlib import Path
 
+import numpy as np
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from api.schemas import (
     IndexDeleteRequest,
@@ -155,6 +158,125 @@ async def index_document(request: IndexRequest):
         message=base_msg,
         chunk_count=len(chunks),
     )
+
+
+def _sse(payload: dict) -> str:
+    """딕셔너리를 SSE ``data:`` 라인으로 직렬화한다.
+
+    Args:
+        payload: 클라이언트로 전송할 진행 이벤트 딕셔너리.
+
+    Returns:
+        ``data: {json}\\n\\n`` 형식의 SSE 문자열.
+    """
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@router.post("/index/stream")
+async def index_document_stream(request: IndexRequest):
+    """문서를 인덱싱하며 진행 상황을 SSE로 스트리밍한다.
+
+    파싱 → 청킹 → 임베딩(청크 배치 단위 진행률) → 인덱싱 단계를 순서대로
+    수행하면서 각 단계를 ``text/event-stream``으로 전송한다. 임베딩은
+    ``embedding.batch_size`` 단위로 나누어 호출해 ``current``/``total`` 진행률을
+    보고하며, 그 결과를 ``searcher.index(embeddings=...)``에 전달해 재임베딩을
+    생략한다.
+
+    이벤트 종류:
+        - ``{"phase": "parsing"}``: 파일 파싱 시작.
+        - ``{"phase": "chunking", "total": N}``: 청킹 완료, 총 청크 수.
+        - ``{"phase": "preparing"}``: 임베딩 모델 로딩 구간(첫 호출 시).
+        - ``{"phase": "embedding", "current": M, "total": N}``: 임베딩 진행률.
+        - ``{"phase": "indexing"}``: BM25/벡터 저장소 반영 단계.
+        - ``{"phase": "done", "chunk_count": N, "replaced": R}``: 완료.
+        - ``{"phase": "error", "detail": "..."}``: 오류.
+        - ``[DONE]``: 스트림 종료 신호.
+
+    Args:
+        request: ``file_path`` 또는 ``content``, ``filename``, ``user_id`` 를 담은
+            인덱싱 요청.
+
+    Returns:
+        SSE(``text/event-stream``) ``StreamingResponse``.
+    """
+    config = get_config()
+
+    def event_stream():
+        try:
+            # 1. 파싱
+            yield _sse({"phase": "parsing"})
+            content = ""
+            if request.file_path:
+                safe_path = _resolve_safe_upload_path(request.file_path)
+                content = load_file(safe_path).content
+            elif request.content:
+                content = request.content
+            else:
+                yield _sse({"phase": "error", "detail": "Either content or file_path must be provided"})
+                return
+
+            if not content:
+                yield _sse({"phase": "error", "detail": "Empty content"})
+                return
+
+            # 2. 청킹
+            filename = request.filename or "uploaded.txt"
+            extension = Path(filename).suffix.lower()
+            doc = Document(
+                content=content,
+                metadata={
+                    "source": filename,
+                    "filename": filename,
+                    "extension": extension,
+                },
+            )
+            chunks = chunk_document(doc)
+
+            if not chunks:
+                yield _sse({"phase": "done", "chunk_count": 0})
+                yield "data: [DONE]\n\n"
+                return
+
+            if request.user_id:
+                for chunk in chunks:
+                    chunk.metadata["user_id"] = request.user_id
+
+            total = len(chunks)
+            yield _sse({"phase": "chunking", "total": total})
+
+            # 3. 임베딩 (배치 단위 진행률 보고)
+            yield _sse({"phase": "preparing"})
+            searcher = get_searcher()  # 첫 호출 시 임베딩 모델 로딩
+            batch_size = config.embedding.batch_size
+            contents = [c.content for c in chunks]
+            embedding_batches: list[np.ndarray] = []
+            for start in range(0, total, batch_size):
+                batch = contents[start:start + batch_size]
+                embedding_batches.append(searcher.embedder.embed(batch))
+                done_n = min(start + batch_size, total)
+                yield _sse({"phase": "embedding", "current": done_n, "total": total})
+
+            embeddings = np.vstack(embedding_batches) if embedding_batches else None
+
+            # 4. 인덱싱 (in-memory 상태 보호 락)
+            yield _sse({"phase": "indexing"})
+            index_path = Path(config.project.index_path)
+            index_path.mkdir(parents=True, exist_ok=True)
+            with get_searcher_lock():
+                replaced = searcher.delete_by_source(filename, user_id=request.user_id)
+                searcher.index(chunks, embeddings=embeddings)
+                searcher.save(index_path)
+
+            # 5. 완료
+            yield _sse({"phase": "done", "chunk_count": total, "replaced": replaced})
+            yield "data: [DONE]\n\n"
+        except HTTPException as exc:
+            yield _sse({"phase": "error", "detail": str(exc.detail)})
+        except Exception as exc:  # noqa: BLE001 - 스트림 소비자에게 오류 전달
+            logger.error("index_stream_failed", error=str(exc))
+            yield _sse({"phase": "error", "detail": "인덱싱 중 오류가 발생했습니다."})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @router.delete("/index/by-source", response_model=IndexDeleteResponse)
