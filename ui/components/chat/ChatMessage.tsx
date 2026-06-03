@@ -69,6 +69,19 @@ export function ChatMessage({ message }: ChatMessageProps) {
     const isUser = message.role === "user";
     const [selectedRef, setSelectedRef] = React.useState<{ content: string; source: string; score: number } | null>(null);
     const [showReasoning, setShowReasoning] = React.useState(true);
+    // 참조 문서 섹션 전체 접힘 상태(기본 접힘) 및 펼쳐진 문서 그룹 키 집합.
+    const [showRefs, setShowRefs] = React.useState(false);
+    const [expandedGroups, setExpandedGroups] = React.useState<Set<string>>(new Set());
+
+    /** 특정 문서 그룹의 펼침/접힘을 토글한다. */
+    const toggleGroup = (key: string) => {
+        setExpandedGroups((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            return next;
+        });
+    };
 
     const hasContent = !!message.content;
     const hasReasoning = !!message.reasoning;
@@ -85,6 +98,27 @@ export function ChatMessage({ message }: ChatMessageProps) {
     const getFileName = (path: string) => {
         return path.split(/[/\\]/).pop() || path;
     };
+
+    // 참조 청크를 source(문서) 단위로 그룹핑한다. 청크는 중복 제거하지 않고
+    // 같은 문서로 묶어, "버튼 수십 개" 대신 "문서 N개"로 체감 부담을 줄인다.
+    // 그룹은 최고 점수 내림차순, 그룹 내 청크도 점수 내림차순으로 정렬한다.
+    const referenceGroups = React.useMemo(() => {
+        const refs = message.references ?? [];
+        const map = new Map<string, { name: string; chunks: typeof refs }>();
+        for (const ref of refs) {
+            const key = ref.source;
+            if (!map.has(key)) map.set(key, { name: getFileName(ref.source), chunks: [] });
+            map.get(key)!.chunks.push(ref);
+        }
+        return Array.from(map.entries())
+            .map(([key, g]) => ({
+                key,
+                name: g.name,
+                chunks: [...g.chunks].sort((a, b) => b.score - a.score),
+                bestScore: Math.max(...g.chunks.map((c) => c.score)),
+            }))
+            .sort((a, b) => b.bestScore - a.bestScore);
+    }, [message.references]);
 
     return (
         <div className={`py-4 ${isUser ? "bg-transparent" : "bg-muted/30"}`}>
@@ -141,29 +175,59 @@ export function ChatMessage({ message }: ChatMessageProps) {
                                 )
                             )}
 
-                            {/* References (Bot only) */}
+                            {/* References (Bot only) — 문서 단위 그룹핑 + 전체 접기 */}
                             {message.references && message.references.length > 0 && (
                                 <div className="mt-4 pt-4 border-t">
-                                    <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
+                                    <button
+                                        onClick={() => setShowRefs((v) => !v)}
+                                        className="text-xs text-muted-foreground mb-2 flex items-center gap-1 hover:text-foreground transition-colors"
+                                    >
+                                        {showRefs ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                                         <FileText size={12} />
-                                        참조 문서
-                                    </p>
-                                    <div className="flex flex-wrap gap-2">
-                                        {message.references.map((ref, idx) => (
-                                            <button
-                                                key={idx}
-                                                onClick={() => setSelectedRef(ref)}
-                                                className="text-xs px-2 py-1 bg-muted rounded border hover:bg-muted/80 transition-colors flex items-center gap-1 group"
-                                            >
-                                                <span className="max-w-[150px] truncate text-muted-foreground group-hover:text-foreground">
-                                                    {getFileName(ref.source)}
-                                                </span>
-                                                <span className="text-indigo-500 font-medium">
-                                                    {(ref.score * 100).toFixed(0)}%
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
+                                        참조 문서 {message.references.length}개
+                                        <span className="text-muted-foreground/60">· 문서 {referenceGroups.length}개</span>
+                                    </button>
+
+                                    {showRefs && (
+                                        <div className="flex flex-col gap-1.5">
+                                            {referenceGroups.map((group) => {
+                                                const expanded = expandedGroups.has(group.key);
+                                                return (
+                                                    <div key={group.key} className="rounded border bg-muted/40 overflow-hidden">
+                                                        <button
+                                                            onClick={() => toggleGroup(group.key)}
+                                                            className="flex items-center gap-1.5 w-full px-2 py-1.5 text-left text-xs hover:bg-muted/70 transition-colors"
+                                                        >
+                                                            {expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                                                            <span className="flex-1 truncate text-muted-foreground">{group.name}</span>
+                                                            <span className="text-muted-foreground/70 shrink-0">청크 {group.chunks.length}개</span>
+                                                            <span className="text-indigo-500 font-medium shrink-0">
+                                                                최고 {(group.bestScore * 100).toFixed(0)}%
+                                                            </span>
+                                                        </button>
+                                                        {expanded && (
+                                                            <div className="flex flex-wrap gap-2 px-2 pb-2 pt-1">
+                                                                {group.chunks.map((ref, idx) => (
+                                                                    <button
+                                                                        key={idx}
+                                                                        onClick={() => setSelectedRef(ref)}
+                                                                        className="text-xs px-2 py-1 bg-background rounded border hover:bg-muted/80 transition-colors flex items-center gap-1 group"
+                                                                    >
+                                                                        <span className="text-muted-foreground group-hover:text-foreground">
+                                                                            청크 {idx + 1}
+                                                                        </span>
+                                                                        <span className="text-indigo-500 font-medium">
+                                                                            {(ref.score * 100).toFixed(0)}%
+                                                                        </span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </>
