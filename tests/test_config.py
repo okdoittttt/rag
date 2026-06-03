@@ -60,7 +60,8 @@ class TestConfig:
 
         assert config.embedding.store_type == "qdrant"
         assert config.embedding.batch_size == 32
-        assert config.embedding.model == "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+        assert config.embedding.model == "gemini-embedding-2"
+        assert config.embedding.dimension == 3072
         assert config.retrieval.score_threshold == 0.4
         assert ".pdf" in config.ingestion.supported_extensions
     
