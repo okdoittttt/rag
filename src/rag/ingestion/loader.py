@@ -8,9 +8,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from rag.ingestion.document import Document
+from rag.ingestion.parsers import _PARSERS, get_parser as _registry_get_parser
 from rag.ingestion.parsers.base import DocumentParser
-from rag.ingestion.parsers.text import TextParser
-from rag.ingestion.parsers.pdf import PDFParser
 from rag.logger import get_logger
 
 
@@ -19,19 +18,14 @@ logger = get_logger(__name__)
 
 class DocumentLoader:
     """문서 로더"""
-    
+
     def __init__(self):
-        self.parsers: list[DocumentParser] = [
-            TextParser(),
-            PDFParser(),
-        ]
-        
+        # 파서 레지스트리(단일 소스)를 그대로 재사용한다.
+        self.parsers: list[DocumentParser] = _PARSERS
+
     def get_parser(self, path: Path) -> DocumentParser | None:
         """파일에 적합한 파서 반환"""
-        for parser in self.parsers:
-            if parser.can_parse(path):
-                return parser
-        return None
+        return _registry_get_parser(path)
         
     def load(self, path: Path | str) -> str:
         """파일에서 텍스트 추출

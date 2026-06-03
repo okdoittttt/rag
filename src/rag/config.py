@@ -26,9 +26,26 @@ class ProjectConfig(BaseModel):
     index_path: str = "data/index"
 
 
+def _default_supported_extensions() -> list[str]:
+    """파서 레지스트리에서 지원 확장자 목록을 가져온다.
+
+    파서 레지스트리를 단일 소스로 삼기 위한 기본값 팩토리이다. 모듈 최상위가
+    아닌 호출 시점에 import 하여 ``config`` ↔ ``logger`` ↔ ``parsers`` 사이의
+    순환 import 를 피한다.
+
+    Returns:
+        등록된 모든 파서가 지원하는 확장자 리스트.
+    """
+    from rag.ingestion.parsers import get_supported_extensions
+
+    return get_supported_extensions()
+
+
 class IngestionConfig(BaseModel):
     """문서 수집 설정"""
-    supported_extensions: list[str] = Field(default=[".txt", ".md", ".pdf"])
+    # 지원 확장자. 미지정 시 파서 레지스트리에서 자동으로 채운다(단일 소스).
+    # YAML/환경변수로 명시하면 해당 목록으로 좁히는 override 로 동작한다.
+    supported_extensions: list[str] = Field(default_factory=_default_supported_extensions)
     encoding: str = "utf-8"
 
 

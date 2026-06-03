@@ -2,8 +2,22 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from pathlib import Path
 from rag.generation.prompt import get_system_prompt
+from rag.ingestion.parsers import get_supported_extensions
 
 router = APIRouter()
+
+
+@router.get("/supported-extensions")
+async def get_supported_extensions_endpoint():
+    """업로드 가능한 파일 확장자 목록을 반환합니다.
+
+    파서 레지스트리를 단일 소스로 참조하므로, 새 파서를 추가하면 별도 수정 없이
+    이 목록과 UI 의 허용 형식이 함께 갱신됩니다.
+
+    Returns:
+        ``{"extensions": [".txt", ".pdf", ...]}`` 형태의 딕셔너리.
+    """
+    return {"extensions": get_supported_extensions()}
 
 # Docker에서는 /app/data, 로컬에서는 프로젝트 루트의 data/ 사용
 def get_data_path() -> Path:

@@ -7,10 +7,12 @@ project:
   index_path: data/index
 
 ingestion:
-  supported_extensions:
-    - ".txt"
-    - ".md"
-    - ".pdf"
+  # supported_extensions 는 기본적으로 파서 레지스트리(src/rag/ingestion/parsers)
+  # 에서 자동으로 채워진다(단일 소스). 특정 확장자만 받도록 좁히고 싶을 때만
+  # 아래처럼 명시적으로 지정한다(override).
+  # supported_extensions:
+  #   - ".txt"
+  #   - ".pdf"
   encoding: utf-8
 
 chunking:
