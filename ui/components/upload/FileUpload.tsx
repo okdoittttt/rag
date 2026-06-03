@@ -7,12 +7,33 @@ interface FileUploadProps {
     onUploadComplete?: () => void;
 }
 
+type IndexPhase = "parsing" | "chunking" | "preparing" | "embedding" | "indexing";
+
 interface UploadStatus {
     file: File;
     status: "pending" | "uploading" | "success" | "error";
     message?: string;
     chunkCount?: number;
-    progress?: number;
+    phase?: IndexPhase;
+    embedProgress?: number; // 임베딩 단계 진행률(0-100)
+}
+
+/** 인덱싱 단계(phase)를 사용자에게 보여줄 한국어 라벨로 변환한다. */
+function phaseLabel(phase?: IndexPhase, embedProgress?: number): string {
+    switch (phase) {
+        case "parsing":
+            return "파싱 중…";
+        case "chunking":
+            return "청킹 중…";
+        case "preparing":
+            return "준비 중 (모델 로딩)…";
+        case "embedding":
+            return `임베딩 중… ${embedProgress ?? 0}%`;
+        case "indexing":
+            return "인덱싱 중…";
+        default:
+            return "처리 중…";
+    }
 }
 
 export default function FileUpload({ onUploadComplete }: FileUploadProps) {
@@ -30,40 +51,73 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
         setIsDragging(false);
     }, []);
 
-    const uploadFile = (
+    const uploadFile = async (
         file: File,
-        onProgress: (pct: number) => void
+        onPhase: (phase: IndexPhase, embedProgress?: number) => void
     ): Promise<{ success: boolean; message: string; chunkCount?: number }> => {
-        // XHR을 사용해 파일을 raw 바이트로 전송한다. fetch는 업로드 진행률
-        // 이벤트를 지원하지 않으므로 진행률 표시를 위해 XHR을 사용한다.
-        return new Promise((resolve) => {
-            const xhr = new XMLHttpRequest();
-            xhr.open("POST", "/api/upload");
-            // 파일명은 헤더로 전달 (본문은 파일 raw 바이트 스트림)
-            xhr.setRequestHeader("x-filename", encodeURIComponent(file.name));
+        // 파일을 raw 바이트로 전송하고(본문), 서버가 돌려주는 SSE 진행 이벤트를
+        // 읽어 파싱→임베딩→인덱싱 단계를 실시간 표시한다.
+        try {
+            const response = await fetch("/api/upload", {
+                method: "POST",
+                headers: { "x-filename": encodeURIComponent(file.name) },
+                body: file,
+            });
 
-            xhr.upload.onprogress = (e) => {
-                if (e.lengthComputable) {
-                    onProgress(Math.round((e.loaded / e.total) * 100));
-                }
-            };
-
-            xhr.onload = () => {
-                let data: { message?: string; error?: string; chunk_count?: number } = {};
+            if (!response.ok || !response.body) {
+                let msg = `업로드 실패 (${response.status})`;
                 try {
-                    data = JSON.parse(xhr.responseText);
+                    const d = await response.json();
+                    msg = d.error || msg;
                 } catch {
-                    // JSON 파싱 실패 시 빈 객체 유지
+                    // JSON 응답이 아니면 기본 메시지 유지
                 }
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    resolve({ success: true, message: data.message ?? "업로드 완료", chunkCount: data.chunk_count });
-                } else {
-                    resolve({ success: false, message: data.error ?? `업로드 실패 (${xhr.status})` });
+                return { success: false, message: msg };
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+            let chunkCount = 0;
+            let errorDetail = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    const data = line.slice(6);
+                    if (data === "[DONE]") continue;
+                    try {
+                        const ev = JSON.parse(data);
+                        if (ev.phase === "embedding") {
+                            const pct = ev.total ? Math.round((ev.current / ev.total) * 100) : 0;
+                            onPhase("embedding", pct);
+                        } else if (ev.phase === "done") {
+                            chunkCount = ev.chunk_count ?? 0;
+                        } else if (ev.phase === "error") {
+                            errorDetail = ev.detail || "인덱싱 오류";
+                        } else if (ev.phase) {
+                            onPhase(ev.phase as IndexPhase);
+                        }
+                    } catch {
+                        // 진행 이벤트 파싱 실패는 무시
+                    }
                 }
-            };
-            xhr.onerror = () => resolve({ success: false, message: "네트워크 오류" });
-            xhr.send(file);
-        });
+            }
+
+            if (errorDetail) {
+                return { success: false, message: errorDetail };
+            }
+            return { success: true, message: `${chunkCount}개 청크 생성`, chunkCount };
+        } catch (error) {
+            return { success: false, message: error instanceof Error ? error.message : "네트워크 오류" };
+        }
     };
 
     const addFiles = (files: FileList | File[]) => {
@@ -107,12 +161,16 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
             if (uploads[i].status !== "pending" && uploads[i].status !== "error") continue;
 
             setUploads((prev) =>
-                prev.map((u, idx) => (idx === i ? { ...u, status: "uploading", progress: 0 } : u))
+                prev.map((u, idx) => (idx === i ? { ...u, status: "uploading", phase: "parsing", embedProgress: undefined } : u))
             );
 
-            const result = await uploadFile(uploads[i].file, (pct) => {
+            const result = await uploadFile(uploads[i].file, (phase, embedProgress) => {
                 setUploads((prev) =>
-                    prev.map((u, idx) => (idx === i ? { ...u, progress: pct } : u))
+                    prev.map((u, idx) =>
+                        idx === i
+                            ? { ...u, phase, embedProgress: phase === "embedding" ? embedProgress : u.embedProgress }
+                            : u
+                    )
                 );
             });
 
@@ -251,14 +309,16 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
                                     )}
                                     {upload.status === "uploading" && (
                                         <div className="mt-1">
-                                            <div className="h-1 w-full bg-white/10 rounded">
-                                                <div
-                                                    className="h-1 bg-blue-500 rounded transition-all"
-                                                    style={{ width: `${upload.progress ?? 0}%` }}
-                                                />
-                                            </div>
+                                            {upload.phase === "embedding" && (
+                                                <div className="h-1 w-full bg-white/10 rounded">
+                                                    <div
+                                                        className="h-1 bg-blue-500 rounded transition-all"
+                                                        style={{ width: `${upload.embedProgress ?? 0}%` }}
+                                                    />
+                                                </div>
+                                            )}
                                             <p className="text-xs text-blue-400 mt-0.5">
-                                                업로드 중… {upload.progress ?? 0}%
+                                                {phaseLabel(upload.phase, upload.embedProgress)}
                                             </p>
                                         </div>
                                     )}

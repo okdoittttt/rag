@@ -64,60 +64,86 @@ export async function POST(req: NextRequest) {
 
         // 저장된 파일 크기 (스트리밍이므로 디스크에서 조회)
         const { size: filesize } = await stat(filepath);
+        const mimetype = req.headers.get("content-type") || "application/octet-stream";
 
-        // 백엔드 /index API 호출 (content 대신 file_path 전달, 백엔드에서 파싱)
-        console.log(`Sending upload request to backend: ${API_BASE_URL}/index`);
+        // 백엔드 /index/stream(SSE) 호출 → 진행 이벤트를 클라이언트로 그대로 relay
+        const backendRes = await fetch(`${API_BASE_URL}/index/stream`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-API-Key": process.env.API_KEY || "",
+            },
+            body: JSON.stringify({
+                file_path: filepath,
+                filename: originalFilename,
+                user_id: userId,
+            }),
+            cache: "no-store",
+        });
 
-        let response;
-        try {
-            response = await fetch(`${API_BASE_URL}/index`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-API-Key": process.env.API_KEY || "",
-                    "Connection": "close",
-                },
-                body: JSON.stringify({
-                    file_path: filepath,
-                    filename: originalFilename,
-                    user_id: userId,
-                }),
-                cache: "no-store",
-            });
-        } catch (fetchError) {
-            console.error(`Fetch failed for ${API_BASE_URL}/index:`, fetchError);
-            throw fetchError;
-        }
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Backend returned error ${response.status}:`, errorText);
+        if (!backendRes.ok || !backendRes.body) {
+            const errorText = await backendRes.text().catch(() => "");
+            console.error(`Backend stream error ${backendRes.status}:`, errorText);
             return NextResponse.json(
-                { error: `백엔드 처리 실패: ${response.status} - ${errorText}` },
-                { status: response.status }
+                { error: `백엔드 처리 실패: ${backendRes.status}` },
+                { status: backendRes.status || 502 }
             );
         }
 
-        const data = await response.json();
-        const chunkCount = data.chunk_count || 0;
+        // SSE를 클라이언트로 파이핑하면서 done 이벤트의 chunk_count를 가로채,
+        // 스트림 종료(flush) 시점에 문서 메타데이터를 DB에 저장한다.
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let chunkCount = 0;
+        let sawError = false;
 
-        // DB에 문서 정보 저장
-        const document = await prisma.document.create({
-            data: {
-                filename: originalFilename,
-                filepath: filepath,
-                filesize: filesize,
-                mimetype: req.headers.get("content-type") || "application/octet-stream",
-                chunkCount: chunkCount,
-                userId: userId,
+        const transform = new TransformStream({
+            transform(chunk, controller) {
+                controller.enqueue(chunk); // 클라이언트로 그대로 relay
+                buffer += decoder.decode(chunk, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+                for (const line of lines) {
+                    if (!line.startsWith("data: ")) continue;
+                    const data = line.slice(6);
+                    if (data === "[DONE]") continue;
+                    try {
+                        const ev = JSON.parse(data);
+                        if (ev.phase === "done") {
+                            chunkCount = ev.chunk_count ?? 0;
+                        } else if (ev.phase === "error") {
+                            sawError = true;
+                        }
+                    } catch {
+                        // 진행 이벤트 파싱 실패는 무시 (relay에는 영향 없음)
+                    }
+                }
+            },
+            async flush() {
+                if (sawError) return;
+                try {
+                    await prisma.document.create({
+                        data: {
+                            filename: originalFilename,
+                            filepath: filepath,
+                            filesize: filesize,
+                            mimetype: mimetype,
+                            chunkCount: chunkCount,
+                            userId: userId,
+                        },
+                    });
+                } catch (e) {
+                    console.error("DB save error after indexing:", e);
+                }
             },
         });
 
-        return NextResponse.json({
-            message: `${originalFilename} 업로드 완료 (${chunkCount}개 청크 생성)`,
-            chunk_count: chunkCount,
-            filename: originalFilename,
-            document_id: document.id,
+        return new Response(backendRes.body.pipeThrough(transform), {
+            headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
         });
     } catch (error) {
         console.error("Upload error:", error);
