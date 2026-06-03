@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Upload, FileText, X, CheckCircle, AlertCircle, Loader2, Play } from "lucide-react";
 
 interface FileUploadProps {
@@ -36,10 +36,32 @@ function phaseLabel(phase?: IndexPhase, embedProgress?: number): string {
     }
 }
 
+// 백엔드 조회 실패 시 사용할 폴백 목록.
+const FALLBACK_EXTENSIONS = [".txt", ".md", ".pdf", ".docx", ".xlsx", ".pptx", ".csv", ".hwpx"];
+
 export default function FileUpload({ onUploadComplete }: FileUploadProps) {
     const [isDragging, setIsDragging] = useState(false);
     const [uploads, setUploads] = useState<UploadStatus[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [supportedExtensions, setSupportedExtensions] = useState<string[]>(FALLBACK_EXTENSIONS);
+
+    // 지원 확장자 목록을 백엔드(파서 레지스트리)에서 가져온다.
+    useEffect(() => {
+        let active = true;
+        fetch("/api/supported-extensions")
+            .then((res) => res.json())
+            .then((data) => {
+                if (active && Array.isArray(data.extensions) && data.extensions.length) {
+                    setSupportedExtensions(data.extensions);
+                }
+            })
+            .catch(() => {
+                // 조회 실패 시 폴백 목록 유지
+            });
+        return () => {
+            active = false;
+        };
+    }, []);
 
     const handleDragOver = useCallback((e: React.DragEvent) => {
         e.preventDefault();
@@ -122,14 +144,13 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
 
     const addFiles = (files: FileList | File[]) => {
         const fileArray = Array.from(files);
-        const allowedTypes = [".txt", ".md", ".pdf"];
 
         // 중복 파일 제거
         const existingNames = new Set(uploads.map(u => u.file.name));
 
         const validFiles = fileArray.filter((file) => {
             const ext = "." + file.name.split(".").pop()?.toLowerCase();
-            if (!allowedTypes.includes(ext)) return false;
+            if (!supportedExtensions.includes(ext)) return false;
             if (existingNames.has(file.name)) return false;
             return true;
         });
@@ -234,7 +255,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
                 <input
                     type="file"
                     multiple
-                    accept=".txt,.md,.pdf"
+                    accept={supportedExtensions.join(",")}
                     onChange={handleFileSelect}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     disabled={isProcessing}
@@ -246,7 +267,7 @@ export default function FileUpload({ onUploadComplete }: FileUploadProps) {
                 <p className="text-white font-medium mb-1">
                     파일을 드래그하거나 클릭하여 선택
                 </p>
-                <p className="text-gray-500 text-sm">.txt, .md, .pdf 파일 지원</p>
+                <p className="text-gray-500 text-sm">{supportedExtensions.join(", ")} 파일 지원</p>
             </div>
 
             {/* Action Buttons */}

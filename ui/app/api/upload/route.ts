@@ -9,7 +9,26 @@ import path from "path";
 
 const API_BASE_URL = process.env.API_URL || process.env.API_BASE_URL || "http://127.0.0.1:8000";
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "./data/uploads";
-const ALLOWED_EXTENSIONS = [".txt", ".md", ".pdf"];
+
+// 백엔드(파서 레지스트리) 조회 실패 시 사용할 폴백 목록.
+const FALLBACK_EXTENSIONS = [".txt", ".md", ".pdf", ".docx", ".xlsx", ".pptx", ".csv", ".hwpx"];
+
+/** 업로드 허용 확장자를 백엔드에서 조회한다(실패 시 폴백). */
+async function getAllowedExtensions(): Promise<string[]> {
+    try {
+        const res = await fetch(`${API_BASE_URL}/config/supported-extensions`, {
+            headers: { "X-API-Key": process.env.API_KEY || "" },
+            cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`backend ${res.status}`);
+        const data = await res.json();
+        return Array.isArray(data.extensions) && data.extensions.length
+            ? data.extensions
+            : FALLBACK_EXTENSIONS;
+    } catch {
+        return FALLBACK_EXTENSIONS;
+    }
+}
 
 export async function POST(req: NextRequest) {
     try {
@@ -32,11 +51,12 @@ export async function POST(req: NextRequest) {
         }
         const originalFilename = decodeURIComponent(rawFilename);
 
-        // 파일 확장자 검증
+        // 파일 확장자 검증 (허용 목록은 백엔드 파서 레지스트리에서 조회)
+        const allowedExtensions = await getAllowedExtensions();
         const ext = "." + originalFilename.split(".").pop()?.toLowerCase();
-        if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        if (!allowedExtensions.includes(ext)) {
             return NextResponse.json(
-                { error: "지원되지 않는 파일 형식입니다. (.txt, .md, .pdf만 지원)" },
+                { error: `지원되지 않는 파일 형식입니다. (${allowedExtensions.join(", ")}만 지원)` },
                 { status: 400 }
             );
         }
