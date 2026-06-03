@@ -15,7 +15,9 @@ Python(FastAPI) 백엔드와 Next.js 프론트엔드로 구성되어 있으며, 
   - 이메일/비밀번호 기반 회원가입·로그인 (NextAuth v5 + JWT)
   - 사용자별(`user_id`) 문서·인덱스 격리로 멀티 테넌트 지원
 - **문서 관리**:
-  - Drag & Drop 파일 업로드 (`.txt`, `.md`, `.pdf` 지원)
+  - Drag & Drop 파일 업로드 (`.txt`, `.md`, `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.csv`, `.hwpx` 지원)
+    - 지원 확장자는 파서 레지스트리(`src/rag/ingestion/parsers`)를 단일 소스로 관리하며,
+      `GET /config/supported-extensions`로 조회됩니다. 새 파서 추가 시 UI 허용 형식도 자동 반영.
   - 자동 파싱 → 청킹 → 벡터 인덱싱
   - 문서별 목록 관리, 검색, 개별/일괄 삭제 (인덱스 동기 정리)
   - 증분 인덱싱: 파일 해시 추적으로 변경된 파일만 재인덱싱 (CLI)
@@ -57,7 +59,7 @@ graph TD
     end
 
     subgraph Ingestion
-        Upload["File Upload"] --> Parser["Document Parser (txt/md/pdf)"]
+        Upload["File Upload"] --> Parser["Document Parser (txt/md/pdf/docx/xlsx/pptx/csv/hwpx)"]
         Parser --> Chunker["Chunker (text / markdown / semantic)"]
         Chunker --> Embedder["Embedding (Gemini / Local)"]
         Embedder --> VectorDB
