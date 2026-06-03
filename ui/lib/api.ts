@@ -69,6 +69,15 @@ export async function askQuestion(
 
 /**
  * 스트리밍 질문 답변 API 호출
+ *
+ * 백엔드 `/ask/stream`(SSE)을 호출하여 진행 단계·추론·답변 이벤트를 콜백으로 전달한다.
+ *
+ * @param onChunk 최종 답변 토큰(`{text}`)이 도착할 때마다 호출.
+ * @param onReferences 참조 청크 목록(`{references}`)이 도착할 때 호출.
+ * @param onComplete `[DONE]` 수신 시 호출.
+ * @param onError 오류 발생 시 호출.
+ * @param onReasoning CoT 추론 토큰(`{phase:"reasoning", text}`) 도착 시 호출(선택).
+ * @param onStatus 진행 단계(`searching`/`analyzing`/`reasoning_start` 등) 도착 시 호출(선택).
  */
 export async function askQuestionStream(
     query: string,
@@ -76,7 +85,9 @@ export async function askQuestionStream(
     onChunk: (text: string) => void,
     onReferences: (refs: ChunkReference[]) => void,
     onComplete: () => void,
-    onError: (err: Error) => void
+    onError: (err: Error) => void,
+    onReasoning?: (text: string) => void,
+    onStatus?: (phase: string) => void
 ): Promise<void> {
     try {
         const response = await fetch("/api/ask/stream", {
@@ -131,10 +142,20 @@ export async function askQuestionStream(
 
                     try {
                         const parsed = JSON.parse(data);
-                        if (parsed.text) {
-                            onChunk(parsed.text);
+                        if (parsed.phase === "error") {
+                            onError(new Error(parsed.detail || "답변 생성 중 오류가 발생했습니다."));
+                            return;
+                        } else if (parsed.phase === "reasoning") {
+                            // CoT 추론 토큰
+                            if (parsed.text) onReasoning?.(parsed.text);
                         } else if (parsed.references) {
                             onReferences(parsed.references);
+                        } else if (parsed.text) {
+                            // 최종 답변 토큰 (phase 없음)
+                            onChunk(parsed.text);
+                        } else if (parsed.phase) {
+                            // 진행 단계 (searching/analyzing/reasoning_start 등)
+                            onStatus?.(parsed.phase);
                         }
                     } catch (e) {
                         console.error("Failed to parse SSE data:", data, e);

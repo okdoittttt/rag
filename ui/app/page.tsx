@@ -77,6 +77,12 @@ export default function Home() {
             isLoading: false
           });
           setIsLoading(false);
+        },
+        (reasoning) => {
+          chatStore.appendMessageReasoning(sessionId, botId, reasoning);
+        },
+        (phase) => {
+          chatStore.updateMessage(sessionId, botId, { status: phase });
         }
       );
     } catch (error) {

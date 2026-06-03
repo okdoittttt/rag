@@ -103,6 +103,12 @@ export default function DocumentChatPage() {
                         isLoading: false
                     });
                     setIsLoading(false);
+                },
+                (reasoning) => {
+                    chatStore.appendMessageReasoning(sessionId, botId, reasoning);
+                },
+                (phase) => {
+                    chatStore.updateMessage(sessionId, botId, { status: phase });
                 }
             );
         } catch (error) {
