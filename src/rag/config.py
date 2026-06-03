@@ -50,10 +50,18 @@ class QdrantConfig(BaseModel):
 
 class EmbeddingConfig(BaseModel):
     """임베딩 설정"""
-    model: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-    dimension: int = 384
+    # 임베딩 백엔드. ``local``=SentenceTransformers, ``gemini``=Gemini Embedding API.
+    provider: Literal["local", "gemini"] = "local"
+    model: str = "gemini-embedding-2"
+    dimension: int = 3072
     batch_size: int = Field(default=32, ge=1)
     store_type: Literal["faiss", "qdrant"] = "qdrant"
+    # SentenceTransformer 실행 디바이스. ``None`` 이면 자동 선택, Apple Silicon 은
+    # ``"mps"``, CUDA 환경은 ``"cuda"``, 그 외 ``"cpu"``.
+    device: str | None = None
+    # 쿼리 측 검색 지침(instruction). Qwen3 임베딩은 쿼리에만 지침을 붙이면 검색
+    # 품질이 향상된다(문서 측에는 미적용). 학습이 영어 지침 기반이라 영어로 둔다.
+    query_instruction: str = "Given a question, retrieve relevant passages that answer it."
     qdrant: QdrantConfig = Field(default_factory=QdrantConfig)
 
 

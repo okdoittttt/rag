@@ -21,9 +21,13 @@ chunking:
   semantic_threshold: 0.7 # 의미론적 청킹 유사도 임계값 (0.0-1.0)
 
 embedding:
-  model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
-  dimension: 384
-  batch_size: 32
+  provider: gemini           # gemini(API) | local(SentenceTransformers)
+  model: gemini-embedding-2  # gemini: gemini-embedding-2 / local: HF 모델 ID
+  dimension: 3072            # gemini 출력 차원(128~3072, 권장 768/1536/3072)
+  batch_size: 32             # gemini: 요청당 임베딩 항목 수 / local: encode 배치
+  device: null               # local 전용(mps/cuda/cpu). gemini에선 미사용
+  # 쿼리에만 prepend 하는 task 지침(문서엔 미적용). gemini-embedding-2 권장 형식.
+  query_instruction: "task: search result | query: "
   store_type: qdrant         # qdrant | faiss
   qdrant:
     # host, port는 환경변수(QDRANT_HOST) 또는 기본값 사용
