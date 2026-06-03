@@ -4,7 +4,7 @@ LLM 연동 및 프롬프트 관리를 제공합니다.
 """
 
 from rag.generation.llm import LLM, GeminiLLM, OllamaLLM, get_llm
-from rag.generation.prompt import build_prompt, get_system_prompt
+from rag.generation.prompt import COT_DELIMITER, build_prompt, get_system_prompt
 
 
 __all__ = [
@@ -14,4 +14,5 @@ __all__ = [
     "get_llm",
     "build_prompt",
     "get_system_prompt",
+    "COT_DELIMITER",
 ]

@@ -6,7 +6,6 @@
 import json
 import threading
 from pathlib import Path
-from typing import AsyncIterator
 
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -15,7 +14,7 @@ from api.schemas import AskRequest, AskResponse, ChunkReference
 from api.exceptions import IndexNotFoundError
 from rag.config import get_config
 from rag.embedding import Embedder, get_vector_store
-from rag.generation import build_prompt, get_llm
+from rag.generation import COT_DELIMITER, build_prompt, get_llm
 from rag.logger import get_logger
 from rag.retrieval import HybridSearcher
 from rag.retrieval.intent import is_summarization_intent
@@ -250,45 +249,124 @@ async def ask(request: AskRequest):
     return AskResponse(answer=answer, references=references)
 
 
+def _sse(payload: dict) -> str:
+    """딕셔너리를 SSE ``data:`` 라인으로 직렬화한다.
+
+    Args:
+        payload: 클라이언트로 전송할 이벤트 딕셔너리.
+
+    Returns:
+        ``data: {json}\\n\\n`` 형식의 SSE 문자열. 한국어 보존을 위해
+        ``ensure_ascii=False`` 로 직렬화한다.
+    """
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
 @router.post("/ask/stream")
 async def ask_stream(request: AskRequest):
-    """스트리밍 방식으로 답변 생성 (SSE)"""
-    chunks, unique_results = _search_documents(request)
-    
-    if not chunks:
-        async def empty_response():
-            yield f"data: {json.dumps({'text': '관련 문서를 찾을 수 없습니다.'})}\n\n"
+    """질문에 답하며 진행 단계와 답변을 SSE로 스트리밍한다.
+
+    검색 → 분석 → 추론(CoT) → 답변 순으로 진행하며 각 단계를
+    ``text/event-stream`` 으로 전송한다. LLM 은 한 번 호출로
+    ``추론 + COT_DELIMITER + 답변`` 을 생성하고, 이 함수가 구분자를 경계로
+    토큰을 추론(``phase="reasoning"``)과 최종 답변(``text``)으로 라벨링한다.
+    구분자가 청크 경계에 걸쳐 분할되는 경우를 대비해 마지막 ``len(구분자)-1``
+    글자를 다음 청크까지 보류(holdback)한다.
+
+    이벤트 종류:
+        - ``{"phase": "searching"}``: 문서 검색 시작.
+        - ``{"phase": "analyzing"}``: 프롬프트 구성/LLM 준비.
+        - ``{"references": [...]}``: 참조 청크 목록.
+        - ``{"phase": "reasoning_start"}``: 추론 스트리밍 시작.
+        - ``{"phase": "reasoning", "text": "..."}``: 추론 토큰.
+        - ``{"text": "..."}``: 최종 답변 토큰.
+        - ``{"phase": "error", "detail": "..."}``: 오류.
+        - ``[DONE]``: 스트림 종료 신호.
+
+    Args:
+        request: ``query`` 와 검색/LLM 옵션을 담은 질문 요청.
+
+    Returns:
+        SSE(``text/event-stream``) ``StreamingResponse``.
+    """
+
+    def event_stream():
+        try:
+            # 1. 검색
+            yield _sse({"phase": "searching"})
+            chunks, unique_results = _search_documents(request)
+
+            if not chunks:
+                yield _sse({"text": "관련 문서를 찾을 수 없습니다."})
+                yield "data: [DONE]\n\n"
+                return
+
+            # 2. 분석 (프롬프트 구성 + LLM 준비)
+            yield _sse({"phase": "analyzing"})
+            prompt_mode = "summary" if _should_use_summary_mode(request) else "default"
+            prompt = build_prompt(request.query, chunks, mode=prompt_mode, cot=True)
+            llm = get_llm(
+                provider=request.provider,
+                api_key=request.api_key,
+                model_name=request.model_name,
+                base_url=request.base_url,
+            )
+
+            # 3. 참조 정보 전송
+            references = [
+                {
+                    "content": chunk.content[:500],
+                    "source": chunk.metadata.get("source", "unknown"),
+                    "score": score,
+                }
+                for chunk, score in unique_results
+            ]
+            yield _sse({"references": references})
+
+            # 4. CoT 스트리밍: 추론 → 구분자 → 답변
+            yield _sse({"phase": "reasoning_start"})
+            delimiter = COT_DELIMITER
+            hold = len(delimiter) - 1  # 구분자가 청크 경계에 걸칠 때를 대비한 보류 길이
+            buffer = ""  # 추론/답변 판정 전 보류 중인 텍스트
+            in_answer = False
+
+            for chunk_text in llm.generate_stream(prompt):
+                if in_answer:
+                    if chunk_text:
+                        yield _sse({"text": chunk_text})
+                    continue
+
+                buffer += chunk_text
+                idx = buffer.find(delimiter)
+                if idx != -1:
+                    # 구분자 발견: 앞부분=추론, 뒷부분=답변
+                    reasoning_part = buffer[:idx]
+                    if reasoning_part:
+                        yield _sse({"phase": "reasoning", "text": reasoning_part})
+                    answer_part = buffer[idx + len(delimiter):].lstrip("\n")
+                    if answer_part:
+                        yield _sse({"text": answer_part})
+                    buffer = ""
+                    in_answer = True
+                elif len(buffer) > hold:
+                    # 구분자 미발견: 꼬리 hold 글자만 보류하고 나머지는 추론으로 흘린다.
+                    emit = buffer[: len(buffer) - hold]
+                    buffer = buffer[len(buffer) - hold:]
+                    if emit:
+                        yield _sse({"phase": "reasoning", "text": emit})
+
+            # 5. 루프 종료 후 잔여 버퍼 처리
+            if buffer:
+                if in_answer:
+                    yield _sse({"text": buffer})
+                else:
+                    # 구분자가 끝내 안 나옴(모델 형식 미준수). 남은 꼬리도 추론으로 마무리.
+                    # 답변(text)이 하나도 없으면 프론트가 추론을 답변으로 승격 처리한다.
+                    yield _sse({"phase": "reasoning", "text": buffer})
+
             yield "data: [DONE]\n\n"
-        return StreamingResponse(empty_response(), media_type="text/event-stream")
-    
-    # 참조 정보 (스트림 시작 시 전송)
-    references = [
-        {
-            "content": chunk.content[:500],
-            "source": chunk.metadata.get("source", "unknown"),
-            "score": score,
-        }
-        for chunk, score in unique_results
-    ]
-    
-    prompt_mode = "summary" if _should_use_summary_mode(request) else "default"
-    prompt = build_prompt(request.query, chunks, mode=prompt_mode)
-    llm = get_llm(
-        provider=request.provider,
-        api_key=request.api_key,
-        model_name=request.model_name,
-        base_url=request.base_url,
-    )
-    
-    async def generate():
-        # 먼저 참조 정보 전송
-        yield f"data: {json.dumps({'references': references})}\n\n"
-        
-        # 스트리밍 응답 생성
-        for chunk_text in llm.generate_stream(prompt):
-            yield f"data: {json.dumps({'text': chunk_text})}\n\n"
-        
-        # 완료 신호
-        yield "data: [DONE]\n\n"
-    
-    return StreamingResponse(generate(), media_type="text/event-stream")
+        except Exception as exc:  # noqa: BLE001 - 스트림 소비자에게 오류 전달
+            logger.error("ask_stream_failed", error=str(exc))
+            yield _sse({"phase": "error", "detail": "답변 생성 중 오류가 발생했습니다."})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")

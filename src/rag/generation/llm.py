@@ -25,6 +25,72 @@ load_dotenv()
 logger = get_logger(__name__)
 
 
+def _extract_gemini_text(response) -> str:
+    """Gemini 응답/스트리밍 청크에서 텍스트를 안전하게 추출한다.
+
+    ``response.text`` 빠른 접근자는 유효한 ``Part`` 가 하나도 없는 응답/청크
+    (예: ``finish_reason`` 만 담은 종료 청크, thinking 계열 모델의 사고 전용
+    청크, 안전 정책으로 비어 있는 후보)에 접근하면 ``ValueError`` 를 던진다.
+    스트리밍 중 그런 청크가 섞이면 전체 스트림이 끊기므로, 후보의
+    ``content.parts`` 를 직접 순회하며 텍스트 Part 만 모아 반환한다.
+
+    Args:
+        response: ``generate_content`` 의 응답 객체 또는 스트리밍 청크.
+
+    Returns:
+        추출된 텍스트. 유효한 텍스트 Part 가 없으면 빈 문자열.
+    """
+    try:
+        candidates = getattr(response, "candidates", None) or []
+        texts: list[str] = []
+        for candidate in candidates:
+            content = getattr(candidate, "content", None)
+            parts = getattr(content, "parts", None) or []
+            for part in parts:
+                text = getattr(part, "text", None)
+                if text:
+                    texts.append(text)
+        return "".join(texts)
+    except Exception:  # noqa: BLE001 - 추출 실패는 빈 문자열로 처리
+        return ""
+
+
+def _chunk_finish_reason(chunk) -> object | None:
+    """스트리밍 청크/응답에서 첫 후보의 ``finish_reason`` 을 안전하게 읽는다.
+
+    Args:
+        chunk: ``generate_content`` 의 응답 객체 또는 스트리밍 청크.
+
+    Returns:
+        ``finish_reason`` 값(없으면 ``None``).
+    """
+    try:
+        for candidate in (getattr(chunk, "candidates", None) or []):
+            reason = getattr(candidate, "finish_reason", None)
+            if reason is not None:
+                return reason
+    except Exception:  # noqa: BLE001
+        pass
+    return None
+
+
+def _describe_gemini_parts(chunk) -> list[str]:
+    """진단용: 청크의 각 Part 를 ``thought=.., len=..`` 요약 문자열로 나열한다.
+
+    빈 응답 원인(사고 전용 Part 인지, Part 자체가 없는지)을 로그로 식별하기 위함이다.
+    """
+    out: list[str] = []
+    try:
+        for candidate in (getattr(chunk, "candidates", None) or []):
+            content = getattr(candidate, "content", None)
+            for part in (getattr(content, "parts", None) or []):
+                text = getattr(part, "text", None) or ""
+                out.append(f"thought={getattr(part, 'thought', None)},len={len(text)}")
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
 class LLM(ABC):
     """LLM 추상 기본 클래스"""
     
@@ -69,17 +135,18 @@ class GeminiLLM(LLM):
         try:
             logger.debug("gemini_generating", prompt_length=len(prompt))
             response = self.model.generate_content(prompt)
-            
-            if not response.text:
-                logger.warning("gemini_empty_response", feedback=response.prompt_feedback)
+
+            text = _extract_gemini_text(response)
+            if not text:
+                logger.warning("gemini_empty_response", feedback=getattr(response, "prompt_feedback", None))
                 # prompt_feedback이 존재하면 안전 정책 차단으로 간주
-                if response.prompt_feedback:
+                if getattr(response, "prompt_feedback", None):
                     return (
                         "죄송합니다. 안전 정책에 의해 답변을 생성할 수 없습니다."
                     )
                 return "죄송합니다. 답변을 생성할 수 없습니다."
-                
-            return response.text
+
+            return text
             
         except exceptions.GoogleAPIError as e:
             logger.error("gemini_api_error", error=str(e))
@@ -93,11 +160,34 @@ class GeminiLLM(LLM):
         try:
             logger.debug("gemini_streaming", prompt_length=len(prompt))
             response = self.model.generate_content(prompt, stream=True)
-            
+
+            yielded = False
+            last_finish_reason: object | None = None
             for chunk in response:
-                if chunk.text:
-                    yield chunk.text
-                    
+                last_finish_reason = _chunk_finish_reason(chunk) or last_finish_reason
+                # chunk.text 빠른 접근자는 Part 가 없는 청크에서 예외를 던지므로
+                # 직접 추출한다(part 없는 종료 청크는 빈 문자열 → 건너뜀).
+                text = _extract_gemini_text(chunk)
+                if not text:
+                    logger.debug(
+                        "gemini_stream_chunk_no_text",
+                        finish_reason=str(_chunk_finish_reason(chunk)),
+                        parts=_describe_gemini_parts(chunk),
+                    )
+                    continue
+                yielded = True
+                yield text
+
+            if not yielded:
+                # 빈 응답: UI 가 깜깜이가 되지 않도록 안내 문구를 흘리고, 원인 진단을
+                # 위해 finish_reason 을 경고로 남긴다(MAX_TOKENS=2, SAFETY=3 등).
+                logger.warning(
+                    "gemini_stream_empty",
+                    model=self.model_name,
+                    finish_reason=str(last_finish_reason),
+                )
+                yield "죄송합니다. 모델이 빈 응답을 반환했습니다. (서버 로그의 finish_reason 을 확인해 주세요.)"
+
         except exceptions.GoogleAPIError as e:
             logger.error("gemini_stream_error", error=str(e))
             yield f"API 오류: {str(e)}"
