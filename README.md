@@ -5,9 +5,6 @@ Python(FastAPI) 백엔드와 Next.js 프론트엔드로 구성되어 있으며, 
 
 사용자 인증, 사용자별 문서 격리, 하이브리드 검색 + Cross-Encoder 재정렬, 문서 요약 모드, 스트리밍 답변, 그리고 검색/생성 품질을 정량적으로 측정하는 평가 파이프라인까지 갖춘 풀스택 시스템입니다.
 
-![Terminal RAG UI](./main.png)
-
-
 ## ✨ 주요 기능
 
 - **웹 기반 인터페이스**: 터미널 스타일의 모던하고 직관적인 Web UI
@@ -25,7 +22,7 @@ Python(FastAPI) 백엔드와 Next.js 프론트엔드로 구성되어 있으며, 
   - **전체 문서 채팅**: 업로드된 모든 문서를 대상으로 질문
   - **문서 내 채팅 (Document Scope)**: 특정 문서 안에서만 질문-답변
   - **문서 요약 모드 (`doc_mode`)**: "요약해줘"와 같은 요약 의도를 감지하면
-    top-k 검색 대신 해당 문서의 **전체 청크**를 순서대로 LLM에 투입
+    top-k 검색 대신 해당 문서의 청크를 순서대로(상한 `summary_max_chunks`, 기본 50) LLM에 투입
   - **스트리밍 답변**: SSE(Server-Sent Events) 기반 토큰 단위 실시간 출력
   - **히스토리 저장**: 대화 내용 자동 저장 및 조회
 - **RAG 엔진**:
@@ -39,7 +36,7 @@ Python(FastAPI) 백엔드와 Next.js 프론트엔드로 구성되어 있으며, 
   - **Local**: Ollama (Llama 3, Mistral 등) 연동 가능
   - **Embedding**: Google Gemini Embedding 2 (`gemini-embedding-2`, **기본**) / 로컬 SentenceTransformers 전환 가능 (`embedding.provider`)
   - **Vector Store**: Qdrant(기본) / FAISS 선택
-- **CLI 도구**: 인덱싱·검색·질의를 터미널에서 직접 수행 (`rag` / `python main.py`)
+- **CLI 도구**: 인덱싱·검색·질의를 터미널에서 직접 수행 (`python -m cli.main`)
 - **평가 파이프라인**: 검색 메트릭(Recall@k, MRR 등) + RAGAS(LLM-as-judge) 정량 평가 및 리포트 생성
 
 ## 🏗️ 시스템 아키텍처
@@ -216,15 +213,17 @@ PYTHONPATH=src uv run python -m cli.main index ./docs
 PYTHONPATH=src uv run python -m cli.main index ./docs --reset   # 기존 인덱스 초기화 후 재인덱싱
 
 # 검색 (LLM 호출 없이 관련 청크만 확인 — 디버깅용)
-PYTHONPATH=src uv run python -m cli.main search "RAG 청킹 전략" --top-k 5
+PYTHONPATH=src uv run python -m cli.main search "RAG 청킹 전략" --top-k 5 --alpha 0.5
 
 # 질의-응답 (검색 + LLM 생성)
 PYTHONPATH=src uv run python -m cli.main ask "이 문서의 핵심 내용을 알려줘" \
     --rerank --expand --show-context --provider gemini
 ```
 
-주요 옵션: `--top-k`, `--rerank`(재정렬), `--expand`(쿼리 확장),
+`ask` 주요 옵션: `--top-k`, `--rerank`(재정렬), `--expand`(쿼리 확장),
 `--show-context`(참조 청크 표시), `--provider`(gemini/ollama), `--verbose`.
+`search`는 `--alpha`(0.0=BM25 ~ 1.0=Vector, 기본 0.5)로 하이브리드 가중치를 조절하고,
+`index`는 `--reset`으로 기존 인덱스를 초기화합니다.
 
 ---
 
@@ -236,7 +235,9 @@ PYTHONPATH=src uv run python -m cli.main ask "이 문서의 핵심 내용을 알
 | `POST` | `/ask/stream` | SSE 스트리밍 답변 (참조 선전송 후 토큰 스트리밍) |
 | `POST` | `/search` | LLM 없이 하이브리드 검색 결과만 반환 |
 | `POST` | `/index` | 텍스트/파일 청킹 및 인덱싱 (동일 source 재인덱싱 시 기존 청크 정리) |
+| `POST` | `/index/stream` | SSE로 인덱싱 진행 상황(파싱→청킹→임베딩 진행률→완료) 스트리밍 |
 | `DELETE` | `/index/by-source` | `filename` + `user_id` 단위 인덱스 삭제 |
+| `GET` | `/config/supported-extensions` | 업로드 허용 확장자 목록 조회 (파서 레지스트리 기반) |
 | `GET/POST` | `/config/system-prompt` | 시스템 프롬프트 조회/갱신 |
 
 `/ask` 요청은 `doc_mode`, `source_filter`, `summarize_override`, `expand`, `rerank`,
