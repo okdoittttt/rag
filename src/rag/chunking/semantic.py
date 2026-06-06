@@ -8,13 +8,15 @@ from __future__ import annotations
 
 import re
 import numpy as np
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from rag.chunking.chunk import Chunk
 from rag.ingestion.language import detect_language
 from rag.logger import get_logger
 
 if TYPE_CHECKING:
+    from kiwipiepy import Sentence
+
     from rag.embedding.embedder import Embedder
 
 
@@ -112,7 +114,7 @@ def _split_sentences_korean(text: str) -> list[str]:
     sentences = []
 
     try:
-        for sent in kiwi.split_into_sents(text):
+        for sent in cast("list[Sentence]", kiwi.split_into_sents(text)):
             sentence_text = sent.text.strip()
             if sentence_text:
                 # Handle very long sentences
