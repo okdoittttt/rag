@@ -2,9 +2,12 @@ services:
   qdrant:
     image: qdrant/qdrant:latest
     container_name: rag-qdrant
+    # 호스트 노출은 로컬 디버깅용이며, 컨테이너 간 통신은 내부망(qdrant:6333)을 사용한다.
+    # 기본값은 루프백(127.0.0.1) 바인딩이라 외부에 직접 노출되지 않는다.
+    # AWS 등 다중 프로젝트 환경에서 포트가 겹치면 호스트 .env 에서 변수만 바꾼다.
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - "${QDRANT_BIND:-127.0.0.1:6333}:6333"
+      - "${QDRANT_GRPC_BIND:-127.0.0.1:6334}:6334"
     volumes:
       - qdrant_data:/qdrant/storage
     restart: unless-stopped
@@ -13,8 +16,11 @@ services:
     build: .
     container_name: rag-api
     entrypoint: [ "uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000" ]
+    # 운영에서는 nginx가 UI(Next.js)만 프록시하고, UI가 내부망(api:8000)으로
+    # 백엔드를 호출하므로 API 의 호스트 노출은 필수가 아니다.
+    # 로컬 디버깅/직접 호출 편의를 위해 루프백 바인딩으로만 노출한다.
     ports:
-      - "8000:8000"
+      - "${API_BIND:-127.0.0.1:8000}:8000"
     depends_on:
       - qdrant
     volumes:
@@ -37,8 +43,11 @@ services:
   ui:
     build: ./ui
     container_name: rag-ui
+    # 공개 진입점. nginx reverse proxy 가 이 호스트 포트로 프록시한다.
+    # 다른 프로젝트와 3000 이 겹치면 호스트 .env 에서 UI_BIND 만 바꾼다.
+    #   예) UI_BIND=127.0.0.1:3001  → nginx proxy_pass http://127.0.0.1:3001;
     ports:
-      - "3000:3000"
+      - "${UI_BIND:-127.0.0.1:3000}:3000"
     depends_on:
       - api
     volumes:
